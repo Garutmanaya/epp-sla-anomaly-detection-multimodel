@@ -1,0 +1,56 @@
+[project]
+name = "epp-sla-anomaly-detection-multimodel"
+version = "0.1.0"
+description = "Context-aware anomaly detection for hourly SLA metrics using multiple ML models( XGBoost, IsolationForest )" 
+authors = [
+    { name = "garudaS9S" }
+]
+readme = "README.md"
+requires-python = ">=3.12"
+
+dependencies = [
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "xgboost>=2.0.0",
+    "scikit-learn>=1.3.0",
+    "joblib>=1.3.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.27.0",
+    "boto3>=1.42.82",
+    "mlflow>=3.10.1",
+    "streamlit>=1.56.0",
+    "plotly>=6.6.0",
+]
+
+# -----------------------------
+# Optional dev dependencies
+# -----------------------------
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "jupyter>=1.0.0",
+    "ipykernel>=6.0.0",
+    "matplotlib>=3.7.0"
+]
+
+# -----------------------------
+# Build system
+# -----------------------------
+[build-system]
+requires = ["setuptools>=65.0"]
+build-backend = "setuptools.build_meta"
+
+# -----------------------------
+# Tooling (optional but useful)
+# -----------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.black]
+line-length = 100
+
+[tool.isort]
+profile = "black"
+
+[tool.setuptools.packages.find]
+where = ["src"]
