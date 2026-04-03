@@ -1,0 +1,87 @@
+{
+  "_meta": {
+    "title": "Synthetic EPP Command Metrics Configuration",
+    "version": "1.0.0",
+    "description": "Synthetic EPP data config. Defines normal behavior only.",
+    "owner": "anomaly-detection-system",
+    "last_updated": "2026-04-01",
+    "logic": [
+      "Baseline values define normal ranges per command.",
+      "Randomness adds ±5% noise to simulate natural variation.",
+      "Hourly rules represent contextual normal behavior (not anomalies).",
+      "Any deviation outside this config should be treated as anomaly."
+    ]
+  },
+
+  "randomness": 0.05,
+
+  "commands_meta": {
+    "description": "Baseline behavior per command.",
+    "fields": [
+      "success_vol: expected average success volume",
+      "success_rt: min/max success response time (ms)",
+      "fail_vol: expected average failure volume",
+      "fail_rt: min/max failure response time (ms)"
+    ]
+  },
+
+  "commands": {
+    "ADD-DOMAIN": {
+      "_meta": "Low latency write operation with moderate volume",
+      "success_rt": [12, 13],
+      "success_vol": 4000,
+      "fail_rt": [1, 2],
+      "fail_vol": 5000
+    },
+    "CHECK-DOMAIN": {
+      "_meta": "High volume read operation with very low latency",
+      "success_rt": [1, 2],
+      "success_vol": 20000,
+      "fail_rt": [1, 2],
+      "fail_vol": 500
+    },
+    "MOD-DOMAIN": {
+      "_meta": "Heavy operation with highest volume and latency",
+      "success_rt": [13, 14],
+      "success_vol": 30000,
+      "fail_rt": [5, 6],
+      "fail_vol": 60000
+    },
+    "DEL-DOMAIN": {
+      "_meta": "Moderate volume delete operation with stable latency",
+      "success_rt": [11, 12],
+      "success_vol": 18000,
+      "fail_rt": [4, 5],
+      "fail_vol": 3000
+    }
+  },
+
+  "hourly_rules_meta": {
+    "description": "Contextual behavior overrides by hour (still normal behavior).",
+    "logic": [
+      "Multipliers adjust baseline values for specific hours.",
+      "Used to simulate expected spikes or load patterns.",
+      "These should NOT be treated as anomalies."
+    ]
+  },
+
+  "hourly_rules": {
+    "14": {
+      "_meta": "Extreme traffic spike scenario (still considered normal context)",
+      "ADD-DOMAIN": {
+        "fail_vol_multiplier": 1000,
+        "success_vol_multiplier": 4
+      },
+      "CHECK-DOMAIN": {
+        "success_vol_multiplier": 700
+      }
+    },
+    "21": {
+      "_meta": "Expected peak load for MOD-DOMAIN",
+      "MOD-DOMAIN": {
+        "success_vol_multiplier": 5,
+        "success_rt_multiplier": 1.4
+      }
+    }
+  }
+}

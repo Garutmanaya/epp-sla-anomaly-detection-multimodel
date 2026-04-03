@@ -1,0 +1,23 @@
+{
+  "active_version": "v1",
+
+  "paths": {
+    "model": "models/v1/model_bundle.pkl",
+    "thresholds": "configs/v1/threshold-config.json",
+    "data_config": "configs/v1/data-config.json"
+  },
+
+  "data": {
+    "filename": "synthetic_epp_logs.csv"
+  },
+
+  "s3": {
+    "bucket": "epp-sla",
+    "prefix": "anomaly-detection"
+  },
+
+  "flags": {
+    "upload_to_s3": false,
+    "download_from_s3": false
+  }
+}
