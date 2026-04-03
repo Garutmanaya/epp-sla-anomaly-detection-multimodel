@@ -205,3 +205,23 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# ML Tracking
+mlruns/
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+# Virtual environments
+.venv
+# Matches any folder named __pycache__ at any depth
+**/__pycache__/
+# Matches any file/folder starting with a dot at any depth
+**/.*
+# Ignore all Comma Separated Values files
+*.csv
+# Ignore all Python Pickle files
+*.pkl
