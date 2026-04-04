@@ -19,5 +19,16 @@
   "flags": {
     "upload_to_s3": false,
     "download_from_s3": false
+  }, 
+  "api": {
+    "base_url": "http://localhost:8000",
+    "predict_path": "/predict",
+    "compare_path": "/compare"
+  },
+  "sagemaker": {
+    "enabled": false,
+    "endpoint_name": "epp-sla-hourly-anomaly-endpoint",
+    "region": "us-east-1"
   }
 }
+

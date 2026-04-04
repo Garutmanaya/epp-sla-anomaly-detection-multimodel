@@ -6,11 +6,18 @@ import streamlit as st
 import pandas as pd
 import requests
 import plotly.express as px
+import json
+from common.config_loader import load_main_config, get_api_config
+from dashboard.utils.api_client import call_inference
 
-API_URL = "http://localhost:8000/compare"
+cfg = load_main_config()
+api_cfg = get_api_config(cfg)
+
+
+API_URL = api_cfg["base_url"] + api_cfg["compare_path"]
 
 st.set_page_config(layout="wide")
-st.title("🧠 Advanced Model Comparison")
+st.title("🧠 EPP SLA Hourly Advanced Model Comparison")
 st.caption("Deep analysis of anomaly detection models")
 
 # =========================================
@@ -81,9 +88,9 @@ if st.sidebar.button("Run Analysis"):
         "models": models,
         "data": df_copy.to_dict(orient="records")
     }
-
-    response = requests.post(API_URL, json=payload).json()
+    response = call_inference(payload, mode="compare")
     results = {m: pd.DataFrame(response[m]) for m in models}
+
 
     # =========================================
     # KPI CARDS

@@ -6,15 +6,22 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import requests
+import json
+from common.config_loader import load_main_config, get_api_config
+from dashboard.utils.api_client import call_inference
 
-API_URL = "http://localhost:8000/predict"
+cfg = load_main_config()
+api_cfg = get_api_config(cfg)
 
-st.set_page_config(page_title="Anomaly Dashboard", layout="wide")
+
+API_URL = api_cfg["base_url"] + api_cfg["predict_path"]
+
+st.set_page_config(page_title="EPP SLA Hourly Anomaly Dashboard", layout="wide")
 
 # =========================================
 # HEADER
 # =========================================
-st.title("🚨 Anomaly Detection Dashboard")
+st.title("🚨 EPP SLA Hourly Anomaly Detection Dashboard")
 st.caption("Single Model Inference & Analysis")
 
 # =========================================
@@ -82,8 +89,10 @@ if df is not None:
             "model": model,
             "data": df_copy.to_dict(orient="records")
         }
-        response = requests.post(API_URL, json=payload).json()
+        
+        response = call_inference(payload, mode="predict")
         results = pd.DataFrame(response["results"])
+        
 
     # =========================================
     # FILTERS

@@ -144,4 +144,22 @@ def get_data_settings(config=None):
 
 def get_data_filename(config=None):
     data_cfg = get_data_settings(config)
-    return data_cfg.get("filename", "data.csv")  # safe default
+    return data_cfg.get("filename", "data.csv")  # safe default 
+
+# =========================================
+# GET API and SAGEMAKER CONFIG (FROM main.config.json)
+# =========================================
+def get_api_config(config=None):
+    if config is None:
+        config = load_main_config()
+    return config.get("api", {})
+
+def get_sagemaker_config(config=None):
+    if config is None:
+        config = load_main_config()
+    return config.get("sagemaker", {}) 
+
+def is_sagemaker():
+    if config is None:
+        config = load_main_config()
+    return config.get("sagemaker", {}).get("enabled", False)

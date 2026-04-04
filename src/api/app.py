@@ -79,6 +79,31 @@ def compare(req: CompareRequest):
 
     return output
 
+
+# =========================================
+# SAGEMAKER COMPATIBILITY
+# =========================================
+
+@app.get("/ping")
+def ping():
+    return {"status": "ok"}
+
+
+@app.post("/invocations")
+def invocations(payload: dict):
+
+    model = payload["model"]
+    data = payload["data"]
+
+    df = pd.DataFrame(data)
+    df["timestamp"] = pd.to_datetime(df["timestamp"])
+
+    runner = get_model_runner(model)
+    results = runner(df)
+
+    return results.to_dict(orient="records") 
+
+
 # =========================================
 # run
 # uvicorn api.app:app --reload --port 8000 
