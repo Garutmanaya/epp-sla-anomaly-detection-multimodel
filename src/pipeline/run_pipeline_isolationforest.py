@@ -14,10 +14,10 @@ from common.config_loader import (
 )
 
 from common.data_generator import main as run_data_generation
-from xgboost_ad.train import main as run_training
-from xgboost_ad.threshold_generator import main as run_thresholds
-from xgboost_ad.inference import main as run_inference
-from xgboost_ad.validator import main as run_validation
+from isolationforest_ad.train import main as run_training
+#from isolationforest_ad.threshold_generator import main as run_thresholds
+from isolationforest_ad.inference import main as run_inference
+from isolationforest_ad.validator import main as run_validation
 
 # =========================================
 # PIPELINE STEPS
@@ -32,7 +32,8 @@ def step_training():
 
 def step_thresholds():
     print("\n=== STEP: THRESHOLDS ===")
-    run_thresholds()
+    pass
+    #run_thresholds()
 
 def step_inference():
     print("\n=== STEP: INFERENCE ===")
@@ -122,16 +123,16 @@ if __name__ == "__main__":
 #========================================================
 # CLI EXAMPLES 
 ## Run full pipeline
-# python -m anomaly_detection.pipeline.run_pipeline
+# python -m pipeline.run_pipeline_isolationforest
 #
 # Run specific steps
-# python -m anomaly_detection.pipeline.run_pipeline --step data
-# python -m anomaly_detection.pipeline.run_pipeline --step train
-# python -m anomaly_detection.pipeline.run_pipeline --step thresholds
-# python -m anomaly_detection.pipeline.run_pipeline --step inference
-# python -m anomaly_detection.pipeline.run_pipeline --step validate
-# python -m anomaly_detection.pipeline.run_pipeline --step all
+# python -m pipeline.run_pipeline_isolationforest --step data
+# python -m pipeline.run_pipeline_isolationforest --step train
+# python -m pipeline.run_pipeline_isolationforest --step thresholds
+# python -m pipeline.run_pipeline_isolationforest --step inference
+# python -m pipeline.run_pipeline_isolationforest --step validate
+# python -m pipeline.run_pipeline_isolationforest --step all
 
 # Override version
-#python -m anomaly_detection.pipeline.run_pipeline --version v2
+#python -m pipeline.run_pipeline_isolationforest --version v2
 #===================================================================

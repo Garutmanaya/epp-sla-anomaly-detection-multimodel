@@ -100,6 +100,12 @@ def generate_test_data(start_date, hours, anomaly_prob=0.2):
 
     randomness, commands_config, hourly_rules = load_generator_rules()
 
+    # ---------------------------------
+    # FIX: normalize input
+    # ---------------------------------
+    if isinstance(start_date, str):
+        start_date = datetime.fromisoformat(start_date)
+        
     data = []
     current = start_date
 
