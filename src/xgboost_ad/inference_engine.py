@@ -158,9 +158,9 @@ class InferenceEngine:
                     "Status": self.get_severity_label(culprit["severity"]),
                     "Severity": round(culprit["severity"], 2),
                     "Root_Cause": culprit["metric"],
-                    "Actual": round(culprit["actual"], 2),
-                    "Expected": round(culprit["expected"], 2),
-                    "Deviation": f"{round(culprit['severity'] * 100, 1)}%"
+                    "Actual": str(round(culprit["actual"], 2)),
+                    "Expected": str(round(culprit["expected"], 2)),
+                    "Deviation": str(f"{round(culprit['severity'] * 100, 1)}%")
                 })
             else:
                 results.append({

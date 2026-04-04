@@ -74,9 +74,9 @@ class InferenceEngine:
                     "Status": self.get_severity_label(severity),
                     "Severity": round(severity, 2),
                     "Root_Cause": "anomaly_score",
-                    "Actual": round(score, 4),
-                    "Expected": round(self.threshold, 4),
-                    "Deviation": round(gap, 6)   # ✅ FIX: real gap, not %
+                    "Actual": str(round(score, 4)),
+                    "Expected": str(round(self.threshold, 4)),
+                    "Deviation": str(round(gap, 6))   # ✅ FIX: real gap, not %
                 })
 
             else:

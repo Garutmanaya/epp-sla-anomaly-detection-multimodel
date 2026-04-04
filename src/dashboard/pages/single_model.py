@@ -127,7 +127,7 @@ if df is not None:
 
     if not ts.empty:
         fig = px.line(ts, x="Timestamp", y="alerts", markers=True)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
         st.info("No alerts detected")
 
@@ -143,7 +143,7 @@ if df is not None:
         rc.columns = ["Root_Cause", "Count"]
 
         fig = px.bar(rc, x="Root_Cause", y="Count")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     else:
         st.info("No anomalies")
 
@@ -154,7 +154,7 @@ if df is not None:
 
     if not alerts_df.empty:
         fig = px.histogram(alerts_df, x="Severity", nbins=30)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     # =========================================
     # COMMAND DISTRIBUTION
@@ -172,7 +172,7 @@ if df is not None:
             title="Alerts by Command"
         )
         
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     # =========================================
     # ALERT TABLE
@@ -181,14 +181,14 @@ if df is not None:
 
     st.dataframe(
         alerts_df.sort_values("Severity", ascending=False),
-        use_container_width=True
+        width="stretch"
     )
 
     # =========================================
     # RAW DATA
     # =========================================
     with st.expander("📄 Raw Input Data"):
-        st.dataframe(df.head(100), use_container_width=True)
+        st.dataframe(df.head(100), width="stretch")
 
     with st.expander("📄 Full Results"):
-        st.dataframe(results.head(100), use_container_width=True)
+        st.dataframe(results.head(100), width="stretch")

@@ -48,7 +48,7 @@ if mode == "Generate Data":
             anomaly_prob=anomaly_prob
         )
         st.subheader("📄 Input Data Preview")
-        st.dataframe(st.session_state.df.head(50), use_container_width=True)
+        st.dataframe(st.session_state.df.head(50), width="stretch")
 
 elif mode == "Upload CSV":
 
@@ -137,7 +137,7 @@ if st.sidebar.button("Run Analysis"):
         })
 
         fig = px.bar(overlap_df, x="Category", y="Count", title="Overlap Distribution")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     st.markdown("---")
 
@@ -160,7 +160,7 @@ if st.sidebar.button("Run Analysis"):
     if ts_all:
         ts_df = pd.concat(ts_all)
         fig = px.line(ts_df, x="Timestamp", y="alerts", color="model")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     st.markdown("---")
 
@@ -179,7 +179,7 @@ if st.sidebar.button("Run Analysis"):
             rc.columns = ["Root_Cause", "Count"]
 
             fig = px.bar(rc, x="Root_Cause", y="Count", title=m)
-            cols[i].plotly_chart(fig, use_container_width=True)
+            cols[i].plotly_chart(fig, width="stretch")
 
     st.markdown("---")
 
@@ -204,7 +204,7 @@ if st.sidebar.button("Run Analysis"):
         nbins=30,
         barmode="overlay"
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     st.markdown("---")
 
@@ -223,7 +223,7 @@ if st.sidebar.button("Run Analysis"):
 
         merged["Agreement"] = merged[models].nunique(axis=1) == 1
 
-        st.dataframe(merged.head(100), use_container_width=True)
+        st.dataframe(merged.head(100), width="stretch")
 
     st.markdown("---")
 
@@ -233,4 +233,4 @@ if st.sidebar.button("Run Analysis"):
     with st.expander("📄 Raw Results"):
         for m in models:
             st.subheader(m)
-            st.dataframe(results[m].head(50), use_container_width=True)
+            st.dataframe(results[m].head(50), width="stretch")
