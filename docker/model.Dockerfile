@@ -14,13 +14,11 @@ RUN apt-get update && \
 
 # Install uv
 RUN pip install --no-cache-dir uv
-#RUN pip install --no-cache-dir "uv>=0.4.0"
 
 # Copy dependency files
 COPY pyproject.toml uv.lock ./
 
 # Install dependencies globally (NO .venv)
-#RUN uv sync --frozen --no-install-project --system
 RUN uv pip install --system --no-cache -r pyproject.toml
 
 # =====================================
@@ -36,6 +34,10 @@ COPY --from=builder /usr/local /usr/local
 # Copy app code
 COPY src ./src
 COPY configs ./configs
+# Migrate to S3
+COPY models  ./models
+# Need pyproject.toml to identify the root
+COPY pyproject.toml uv.lock ./
 
 ENV PYTHONPATH=/app/src
 

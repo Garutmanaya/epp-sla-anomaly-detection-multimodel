@@ -10,11 +10,14 @@ RUN apt-get update && \
         curl \
         && rm -rf /var/lib/apt/lists/*
 
+
+# Install uv
 RUN pip install --no-cache-dir uv
 
+# Copy dependency files
 COPY pyproject.toml uv.lock ./
 
-#RUN uv sync --frozen --no-install-project --system
+# Install dependencies globally (NO .venv)
 RUN uv pip install --system --no-cache -r pyproject.toml
 
 # =====================================
@@ -26,9 +29,11 @@ WORKDIR /app
 
 COPY --from=builder /usr/local /usr/local
 
+# Copy app code
 COPY src ./src
-COPY dashboard ./dashboard
 COPY configs ./configs
+# Need pyproject.toml to identify the root
+COPY pyproject.toml uv.lock ./
 
 ENV PYTHONPATH=/app/src
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -36,10 +41,13 @@ ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8501
 
-CMD ["streamlit", "run", "dashboard/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+CMD ["streamlit", "run", "src/dashboard/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
 
 
 #================================================================================
-#docker build -f docker/model.Dockerfile -t epp-sla-hourly-anomaly-model .
-#docker build -f docker/dashboard.Dockerfile -t epp-sla-hourly-anomaly-dashboard .
+# docker build -f docker/model.Dockerfile -t epp-sla-hourly-anomaly-model .
+# docker build -f docker/dashboard.Dockerfile -t epp-sla-hourly-anomaly-dashboard .
+# run
+# docker run -it  -p 8000:8080 epp-sla-hourly-anomaly-model:latest
+# docker run -it  -p 8501:8501 epp-sla-hourly-anomaly-dashboard:latest
 #=====================================================================================

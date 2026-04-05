@@ -140,9 +140,24 @@ def get_flag(name: str, default=False, config=None):
 # =========================================
 # API / SAGEMAKER / S3 CONFIG
 # =========================================
-def get_api_config(config=None) -> dict:
-    return get_section("api", config)
+#def get_api_config(config=None) -> dict:
+#    return get_section("api", config)
 
+import os
+
+def get_api_config(config=None):
+    if config is None:
+        config = load_main_config()
+
+    api_cfg = config.get("api", {})
+
+    # ✅ ENV override (priority)
+    api_cfg["base_url"] = os.getenv(
+        "API_BASE_URL",
+        api_cfg.get("base_url")
+    )
+
+    return api_cfg
 
 def get_sagemaker_config(config=None) -> dict:
     return get_section("sagemaker", config)
