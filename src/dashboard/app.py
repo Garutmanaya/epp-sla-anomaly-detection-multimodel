@@ -1,80 +1,30 @@
 import streamlit as st
+from dashboard.components.header import render_header
 
-# =========================================
-# PAGE CONFIG
-# =========================================
-st.set_page_config(
-    layout="wide",
-    page_title="EPP SLA Anomaly Detection"
-)
+st.set_page_config(layout="wide")
 
-# =========================================
-# S9S ANIMATED LOGO (TOP LEFT)
-# =========================================
+# Hide app.py from sidebar
 st.markdown("""
 <style>
-.s9s-container {
-    position: fixed;
-    top: 12px;
-    left: 20px;
-    z-index: 9999;
-    font-size: 28px;
-    font-weight: 800;
-    font-family: 'Segoe UI', sans-serif;
-    letter-spacing: 2px;
-}
-
-/* Simple, reliable animation */
-.s9s-text {
-    color: #00c6ff;
-    animation: glow 1.5s ease-in-out infinite alternate;
-}
-
-/* Glow animation (Streamlit-safe) */
-@keyframes glow {
-    from {
-        opacity: 0.6;
-        transform: scale(1);
-    }
-    to {
-        opacity: 1;
-        transform: scale(1.1);
-    }
+[data-testid="stSidebarNav"] ul li:first-child {
+    display: none;
 }
 </style>
-
-<div class="s9s-container">
-    <div class="s9s-text">S9S</div>
-</div>
 """, unsafe_allow_html=True)
 
-# =========================================
-# HEADER
-# =========================================
-st.title("🚨 Anomaly Detection")
-st.caption("EPP SLA Monitoring & Multi-Model Analysis")
+# Shared header
+render_header()
 
-st.markdown("---")
+# Default landing content
+st.subheader("📊 Welcome")
 
-# =========================================
-# SIDEBAR NAVIGATION
-# =========================================
-st.sidebar.header("📊 Navigation")
+st.info("Select a dashboard from the sidebar →")
 
-page = st.sidebar.radio(
-    "Select View",
-    ["Single Model", "Compare Models"]
-)
+st.markdown("""
+### Available Dashboards
 
-# =========================================
-# ROUTING
-# =========================================
-if page == "Single Model":
-    import dashboard.pages.single_model
+- 📊 **Single Model** → Analyze one model  
+- 🧠 **Compare Models** → Compare multiple models  
 
-elif page == "Compare Models":
-    import dashboard.pages.compare_models 
-
-#================================================
-# streamlit run dashboard/app.py
-#=================================================
+---
+""")

@@ -1,5 +1,5 @@
 # =========================================
-# ADVANCED MODEL COMPARISON DASHBOARD (UPDATED)
+# ADVANCED MODEL COMPARISON DASHBOARD (FINAL)
 # =========================================
 
 import streamlit as st
@@ -8,9 +8,12 @@ import plotly.express as px
 
 from dashboard.utils.api_client import call_inference
 
-st.set_page_config(layout="wide")
-st.title("🧠 EPP SLA Hourly Advanced Model Comparison")
-st.caption("Deep analysis of anomaly detection models")
+
+# =========================================
+# HEADER (PAGE LEVEL ONLY)
+# =========================================
+st.subheader("🧠 Advanced Model Comparison")
+
 
 # =========================================
 # SIDEBAR
@@ -20,16 +23,23 @@ st.sidebar.header("⚙️ Controls")
 models = st.sidebar.multiselect(
     "Select Models",
     ["xgboost", "isolationforest"],
-    default=["xgboost", "isolationforest"]
+    default=["xgboost", "isolationforest"],
+    key="compare_models_select"
 )
 
-mode = st.sidebar.radio("Mode", ["Generate Data", "Upload CSV"])
+mode = st.sidebar.radio(
+    "Mode",
+    ["Generate Data", "Upload CSV"],
+    key="compare_mode"
+)
+
 
 # =========================================
 # SESSION STATE
 # =========================================
-if "df" not in st.session_state:
-    st.session_state.df = None
+if "compare_df" not in st.session_state:
+    st.session_state.compare_df = None
+
 
 # =========================================
 # DATA INPUT
@@ -38,11 +48,11 @@ if mode == "Generate Data":
 
     from xgboost_ad.validator import generate_test_data
 
-    hours = st.sidebar.slider("Hours", 24, 200, 48)
-    anomaly_prob = st.sidebar.slider("Anomaly Probability", 0.0, 0.5, 0.2)
+    hours = st.sidebar.slider("Hours", 24, 200, 48, key="compare_hours")
+    anomaly_prob = st.sidebar.slider("Anomaly Probability", 0.0, 0.5, 0.2, key="compare_prob")
 
-    if st.sidebar.button("Generate Data"):
-        st.session_state.df = generate_test_data(
+    if st.sidebar.button("Generate Data", key="compare_generate"):
+        st.session_state.compare_df = generate_test_data(
             start_date=pd.Timestamp("2026-05-01"),
             hours=hours,
             anomaly_prob=anomaly_prob
@@ -50,49 +60,58 @@ if mode == "Generate Data":
 
 elif mode == "Upload CSV":
 
-    file = st.sidebar.file_uploader("Upload CSV")
+    file = st.sidebar.file_uploader("Upload CSV", key="compare_upload")
+
     if file:
         df = pd.read_csv(file)
         df["timestamp"] = pd.to_datetime(df["timestamp"])
-        st.session_state.df = df
+        st.session_state.compare_df = df
 
-# -----------------------------------------
-# Stop if no data
-# -----------------------------------------
-df = st.session_state.df
+
+df = st.session_state.compare_df
 
 if df is None:
     st.warning("Generate or upload data")
     st.stop()
 
-# Preview
+
+# =========================================
+# INPUT PREVIEW
+# =========================================
 st.subheader("📄 Input Data Preview")
 st.dataframe(df.head(50), width="stretch")
+
 
 # =========================================
 # RUN ANALYSIS
 # =========================================
-if st.sidebar.button("Run Analysis"):
+if st.sidebar.button("Run Analysis", key="compare_run"):
 
-    # Fix datetime serialization
-    df_copy = df.copy()
-    for col in df_copy.select_dtypes(include=["datetime64[ns]"]).columns:
-        df_copy[col] = df_copy[col].astype(str)
+    if not models:
+        st.warning("Select at least one model")
+        st.stop()
 
-    payload = {
-        "models": models,
-        "data": df_copy.to_dict(orient="records")
-    }
+    with st.spinner("Running comparison..."):
 
-    # ✅ unified API call (no mode)
-    response = call_inference(payload)
+        df_copy = df.copy()
 
-    results = {
-        m: pd.DataFrame(response["results"][m])
-        for m in models
-    }
+        # Fix datetime serialization
+        for col in df_copy.select_dtypes(include=["datetime64[ns]"]).columns:
+            df_copy[col] = df_copy[col].astype(str)
 
-    metadata = response["metadata"]
+        payload = {
+            "models": models,
+            "data": df_copy.to_dict(orient="records")
+        }
+
+        response = call_inference(payload)
+
+        results = {
+            m: pd.DataFrame(response["results"][m])
+            for m in models
+        }
+
+        metadata = response["metadata"]
 
     # =========================================
     # KPI CARDS
@@ -104,21 +123,20 @@ if st.sidebar.button("Run Analysis"):
     for i, m in enumerate(models):
 
         res = results[m]
-        meta = metadata[m]
-
-        alerts = (res["Status"] != "Normal ✅").sum()
         total = len(res)
+        alerts = (res["Status"] != "Normal ✅").sum()
+        alert_pct = (alerts / total * 100) if total else 0
 
         cols[i].metric(
             m.upper(),
-            f"{alerts}",
-            f"{round(alerts/total*100,2)}% | {meta['latency_ms']} ms"
+            alerts,
+            f"{alert_pct:.2f}% | {metadata[m]['latency_ms']} ms"
         )
 
     st.markdown("---")
 
     # =========================================
-    # Model Metadata
+    # MODEL METADATA
     # =========================================
     st.subheader("⚙️ Model Metadata")
 
@@ -131,6 +149,7 @@ if st.sidebar.button("Run Analysis"):
     st.subheader("🔗 Overlap & Agreement")
 
     if len(models) >= 2:
+
         m1, m2 = models[:2]
 
         df1 = results[m1]
@@ -152,7 +171,7 @@ if st.sidebar.button("Run Analysis"):
         c4.metric("No Alert", none)
 
         overlap_df = pd.DataFrame({
-            "Category": ["Both", f"{m1}", f"{m2}", "None"],
+            "Category": ["Both", m1, m2, "None"],
             "Count": [both, only_1, only_2, none]
         })
 

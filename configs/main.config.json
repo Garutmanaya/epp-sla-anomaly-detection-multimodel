@@ -23,6 +23,7 @@
   },
   "api": {
     "base_url": "http://localhost:8000",
+    "health_path": "/",
     "predict_path": "/predict",
     "compare_path": "/compare"
   },

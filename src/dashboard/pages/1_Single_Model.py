@@ -1,5 +1,5 @@
 # =========================================
-# SINGLE MODEL DASHBOARD (UPDATED)
+# SINGLE MODEL DASHBOARD (FINAL - STABLE)
 # =========================================
 
 import streamlit as st
@@ -8,13 +8,12 @@ import plotly.express as px
 
 from dashboard.utils.api_client import call_inference
 
-st.set_page_config(page_title="EPP SLA Hourly Anomaly Dashboard", layout="wide")
 
 # =========================================
-# HEADER
+# HEADER (PAGE LEVEL ONLY)
 # =========================================
-st.title("🚨 EPP SLA Hourly Anomaly Detection Dashboard")
-st.caption("Single Model Inference & Analysis")
+st.subheader("🚨 Single Model Inference & Analysis")
+
 
 # =========================================
 # SIDEBAR
@@ -23,21 +22,29 @@ st.sidebar.header("⚙️ Controls")
 
 model = st.sidebar.selectbox(
     "Select Model",
-    ["xgboost", "isolationforest"]
+    ["xgboost", "isolationforest"],
+    key="single_model_select"
 )
 
-mode = st.sidebar.radio("Mode", ["Generate Data", "Upload CSV"])
+mode = st.sidebar.radio(
+    "Mode",
+    ["Generate Data", "Upload CSV"],
+    key="single_mode"
+)
 
 # Filters
 st.sidebar.subheader("🔍 Filters")
+
 selected_command = st.sidebar.multiselect(
     "Command",
-    ["CHECK-DOMAIN", "ADD-DOMAIN", "MOD-DOMAIN", "DEL-DOMAIN"]
+    ["CHECK-DOMAIN", "ADD-DOMAIN", "MOD-DOMAIN", "DEL-DOMAIN"],
+    key="single_command_filter"
 )
 
 selected_status = st.sidebar.multiselect(
     "Status",
-    ["Normal ✅", "LOW ⚠️", "MEDIUM ⚠️", "CRITICAL 🚨"]
+    ["Normal ✅", "LOW ⚠️", "MEDIUM ⚠️", "CRITICAL 🚨"],
+    key="single_status_filter"
 )
 
 # =========================================
@@ -49,10 +56,10 @@ if mode == "Generate Data":
 
     from xgboost_ad.validator import generate_test_data
 
-    hours = st.sidebar.slider("Hours", 24, 200, 48)
-    anomaly_prob = st.sidebar.slider("Anomaly Probability", 0.0, 0.5, 0.2)
+    hours = st.sidebar.slider("Hours", 24, 200, 48, key="single_hours")
+    anomaly_prob = st.sidebar.slider("Anomaly Probability", 0.0, 0.5, 0.2, key="single_prob")
 
-    if st.sidebar.button("Generate Data"):
+    if st.sidebar.button("Generate Data", key="single_generate"):
         df = generate_test_data(
             start_date=pd.Timestamp("2026-05-01"),
             hours=hours,
@@ -61,11 +68,12 @@ if mode == "Generate Data":
 
 elif mode == "Upload CSV":
 
-    file = st.sidebar.file_uploader("Upload CSV")
+    file = st.sidebar.file_uploader("Upload CSV", key="single_upload")
 
     if file:
         df = pd.read_csv(file)
         df["timestamp"] = pd.to_datetime(df["timestamp"])
+
 
 # =========================================
 # RUN INFERENCE
@@ -81,7 +89,7 @@ if df is not None:
             df_copy[col] = df_copy[col].astype(str)
 
         payload = {
-            "models": [model],   # ✅ unified format
+            "models": [model],
             "data": df_copy.to_dict(orient="records")
         }
 
@@ -102,16 +110,17 @@ if df is not None:
     # =========================================
     # KPI CARDS
     # =========================================
+    total = len(results)
+    alerts = (results["Status"] != "Normal ✅").sum()
+    alert_pct = (alerts / total * 100) if total else 0
+
     c1, c2, c3, c4, c5 = st.columns(5)
 
     c1.metric("Model", model.upper())
-    c2.metric("Total", len(results))
-
-    alerts = (results["Status"] != "Normal ✅").sum()
+    c2.metric("Total", total)
     c3.metric("Alerts", alerts)
-
-    c4.metric("Alert %", f"{alerts/len(results)*100:.2f}%")
-    c5.metric("Latency (ms)", meta["latency_ms"])
+    c4.metric("Alert %", f"{alert_pct:.2f}%")
+    c5.metric("Latency (ms)", meta.get("latency_ms", 0))
 
     st.markdown("---")
 
