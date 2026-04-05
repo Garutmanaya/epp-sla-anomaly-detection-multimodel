@@ -1,19 +1,26 @@
 # =========================================
-# MODULE: FastAPI (multi-model)
+# MODULE: FastAPI (clean unified version)
 # =========================================
 
 from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List
 import pandas as pd
+import time
 
-from api.model_registry import get_model_runner
+from common.model_registry import register_model, get_model
+from common.config_loader import get_active_version, get_flag
+from common.s3_utils import download_models_for_version
+
+from xgboost_ad.inference_engine import InferenceEngine as XGBEngine
+from isolationforest_ad.inference_engine import InferenceEngine as IFEngine
+from common.feature_engineering import prepare_features 
 
 app = FastAPI(title="EPP-SLA-Anomaly Detection API")
 
 
 # =========================================
-# REQUEST SCHEMA
+# REQUEST SCHEMA (UNIFIED)
 # =========================================
 class Record(BaseModel):
     timestamp: str
@@ -24,13 +31,8 @@ class Record(BaseModel):
     fail_rt_avg: float
 
 
-class PredictRequest(BaseModel):
-    model: str                # single model
-    data: List[Record]
-
-
-class CompareRequest(BaseModel):
-    models: List[str]         # multiple models
+class InferenceRequest(BaseModel):
+    models: List[str]   # ALWAYS list
     data: List[Record]
 
 
@@ -43,47 +45,56 @@ def health():
 
 
 # =========================================
-# SINGLE MODEL INFERENCE
+# CORE EXECUTION (REUSABLE)
 # =========================================
-@app.post("/predict")
-def predict(req: PredictRequest):
+def run_models(df: pd.DataFrame, models: List[str]):
 
-    df = pd.DataFrame([r.dict() for r in req.data])
-    df["timestamp"] = pd.to_datetime(df["timestamp"])
-
-    runner = get_model_runner(req.model)
-
-    results = runner(df)
-
-    return {
-        "model": req.model,
-        "results": results.to_dict(orient="records")
-    }
-
-
-# =========================================
-# MULTI-MODEL COMPARISON
-# =========================================
-@app.post("/compare")
-def compare(req: CompareRequest):
-
-    df = pd.DataFrame([r.dict() for r in req.data])
-    df["timestamp"] = pd.to_datetime(df["timestamp"])
-
+    df = prepare_features(df)
     output = {}
+    meta = {}
 
-    for model in req.models:
-        runner = get_model_runner(model)
-        results = runner(df)
+    for model in models:
+
+        start = time.time()
+
+        engine = get_model(model)
+
+        temp_df = df.copy()
+        temp_df = engine.predict(temp_df)
+        results = engine.detect(temp_df)
+
+        latency = round((time.time() - start) * 1000, 2)
+
         output[model] = results.to_dict(orient="records")
 
-    return output
+        meta[model] = {
+            "latency_ms": latency,
+            "records": len(results)
+        }
+
+    return output, meta
+
+
+# =========================================
+# API ENDPOINT (SINGLE + MULTI)
+# =========================================
+@app.post("/predict")
+def predict(req: InferenceRequest):
+
+    df = pd.DataFrame([r.dict() for r in req.data])
+    df["timestamp"] = pd.to_datetime(df["timestamp"])
+
+    results, metadata = run_models(df, req.models)
+
+    return {
+        "results": results,
+        "metadata": metadata
+    }
 
 
 # =========================================
 # SAGEMAKER COMPATIBILITY
 # =========================================
-
 @app.get("/ping")
 def ping():
     return {"status": "ok"}
@@ -92,19 +103,44 @@ def ping():
 @app.post("/invocations")
 def invocations(payload: dict):
 
-    model = payload["model"]
-    data = payload["data"]
-
-    df = pd.DataFrame(data)
+    df = pd.DataFrame(payload["data"])
     df["timestamp"] = pd.to_datetime(df["timestamp"])
 
-    runner = get_model_runner(model)
-    results = runner(df)
+    models = payload.get("models", [])
 
-    return results.to_dict(orient="records") 
+    if not models:
+        return {"error": "Provide 'models'"}
+
+    results, metadata = run_models(df, models)
+
+    return {
+        "results": results,
+        "metadata": metadata
+    }
 
 
 # =========================================
-# run
-# uvicorn api.app:app --reload --port 8000 
+# STARTUP -- Load Models
 # =========================================
+@app.on_event("startup")
+def load_models():
+
+    version = get_active_version()
+
+    print("🚀 Loading models...")
+
+    if get_flag("download_from_s3"):
+        print("Downloading models from S3...")
+        download_models_for_version(version)
+
+    register_model("xgboost", XGBEngine(version))
+    register_model("isolationforest", IFEngine(version))
+
+    print("✅ Models loaded")
+
+
+# =========================================
+# RUN
+# uvicorn api.app:app --port 8000
+# =========================================
+

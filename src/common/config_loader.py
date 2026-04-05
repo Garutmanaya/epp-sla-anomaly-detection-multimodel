@@ -1,11 +1,8 @@
 # =========================================
 # MODULE: config_loader
-# PURPOSE: Centralized config + path resolution (root-safe)
+# PURPOSE: Centralized config + root-safe path resolution
 # =========================================
 
-# =========================================
-# IMPORTS
-# =========================================
 import json
 import os
 from pathlib import Path
@@ -14,7 +11,7 @@ from pathlib import Path
 # =========================================
 # ROOT RESOLUTION
 # =========================================
-def get_project_root():
+def get_project_root() -> Path:
     """
     Robust project root detection using pyproject.toml
     """
@@ -24,22 +21,25 @@ def get_project_root():
         if (parent / "pyproject.toml").exists():
             return parent
 
-    raise RuntimeError("Could not locate project root")
+    raise RuntimeError("Could not locate project root (pyproject.toml missing)")
 
-def resolve_path(relative_path):
+
+# =========================================
+# PATH RESOLUTION
+# =========================================
+def resolve_path(relative_path: str) -> str:
     """
     Convert relative path → absolute path using project root
     """
-    root = get_project_root()
-    return os.path.join(root, relative_path)
+    return str(get_project_root() / relative_path)
 
 
 # =========================================
 # LOAD MAIN CONFIG
 # =========================================
-def load_main_config(config_path=None):
+def load_main_config(config_path: str = None) -> dict:
     """
-    Load main config from project root
+    Load main.config.json from project root
     """
     if config_path is None:
         config_path = resolve_path("configs/main.config.json")
@@ -52,9 +52,9 @@ def load_main_config(config_path=None):
 
 
 # =========================================
-# GET ACTIVE VERSION
+# VERSION
 # =========================================
-def get_active_version(config=None):
+def get_active_version(config: dict = None) -> str:
     if config is None:
         config = load_main_config()
 
@@ -62,28 +62,28 @@ def get_active_version(config=None):
 
 
 # =========================================
-# GET PATHS (ROOT-RESOLVED)
+# GENERIC CONFIG ACCESS
 # =========================================
-def get_paths(config=None):
-    """
-    Returns all paths resolved to absolute paths
-    """
+def get_section(section: str, config: dict = None) -> dict:
     if config is None:
         config = load_main_config()
 
-    raw_paths = config.get("paths", {})
-
-    resolved = {}
-    for key, path in raw_paths.items():
-        resolved[key] = resolve_path(path)
-
-    return resolved
+    return config.get(section, {})
 
 
 # =========================================
-# GET SPECIFIC PATH (ROOT-RESOLVED)
+# PATHS (from config.paths)
 # =========================================
-def get_path(key, config=None):
+def get_paths(config=None) -> dict:
+    raw_paths = get_section("paths", config)
+
+    return {
+        key: resolve_path(path)
+        for key, path in raw_paths.items()
+    }
+
+
+def get_path(key: str, config=None) -> str:
     paths = get_paths(config)
 
     if key not in paths:
@@ -93,73 +93,64 @@ def get_path(key, config=None):
 
 
 # =========================================
-# RESOLVE VERSIONED PATH (ROOT-RESOLVED)
+# VERSIONED PATH (legacy support)
 # =========================================
-def resolve_version_path(base_dir, filename, version=None):
+def resolve_version_path(base_dir: str, filename: str, version: str = None) -> str:
     """
-    Build absolute path:
-        project_root/base_dir/version/file
+    Build:
+    project_root/base_dir/version/filename
     """
     if version is None:
         version = get_active_version()
 
-    relative = os.path.join(base_dir, version, filename)
-    return resolve_path(relative)
+    return resolve_path(os.path.join(base_dir, version, filename))
 
 
 # =========================================
-# LOAD DATA CONFIG (ROOT-RESOLVED)
+# DATA CONFIG
 # =========================================
-def load_data_config(config=None):
+def load_data_config(config=None) -> dict:
     try:
         path = get_path("data_config", config)
         with open(path, "r") as f:
             return json.load(f)
     except Exception:
-        return {} 
-    
-# =========================================
-# GET FLAGS
-# =========================================
-def get_flags(config=None):
-    if config is None:
-        config = load_main_config()
-
-    return config.get("flags", {})
+        return {}
 
 
-def get_flag(name, default=False, config=None):
-    flags = get_flags(config)
-    return flags.get(name, default) 
+def get_data_settings(config=None) -> dict:
+    return get_section("data", config)
+
+
+def get_data_filename(config=None) -> str:
+    return get_data_settings(config).get("filename", "data.csv")
+
 
 # =========================================
-# GET DATA CONFIG (FROM main.config.json)
+# FLAGS
 # =========================================
-def get_data_settings(config=None):
-    if config is None:
-        config = load_main_config()
-
-    return config.get("data", {})
+def get_flags(config=None) -> dict:
+    return get_section("flags", config)
 
 
-def get_data_filename(config=None):
-    data_cfg = get_data_settings(config)
-    return data_cfg.get("filename", "data.csv")  # safe default 
+def get_flag(name: str, default=False, config=None):
+    return get_flags(config).get(name, default)
+
 
 # =========================================
-# GET API and SAGEMAKER CONFIG (FROM main.config.json)
+# API / SAGEMAKER / S3 CONFIG
 # =========================================
-def get_api_config(config=None):
-    if config is None:
-        config = load_main_config()
-    return config.get("api", {})
+def get_api_config(config=None) -> dict:
+    return get_section("api", config)
 
-def get_sagemaker_config(config=None):
-    if config is None:
-        config = load_main_config()
-    return config.get("sagemaker", {}) 
 
-def is_sagemaker():
-    if config is None:
-        config = load_main_config()
-    return config.get("sagemaker", {}).get("enabled", False)
+def get_sagemaker_config(config=None) -> dict:
+    return get_section("sagemaker", config)
+
+
+def is_sagemaker(config=None) -> bool:
+    return get_sagemaker_config(config).get("enabled", False)
+
+
+def get_s3_config(config=None) -> dict:
+    return get_section("s3", config)

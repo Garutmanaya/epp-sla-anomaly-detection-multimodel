@@ -10,16 +10,17 @@
   "data": {
     "filename": "synthetic_epp_logs.csv"
   },
-
-  "s3": {
+  "s3": 
+  {
+    "enabled": false,
     "bucket": "epp-sla",
-    "prefix": "anomaly-detection"
+    "prefix": "anomaly-detection",
+    "region": "us-east-1"
   },
-
   "flags": {
     "upload_to_s3": false,
     "download_from_s3": false
-  }, 
+  },
   "api": {
     "base_url": "http://localhost:8000",
     "predict_path": "/predict",

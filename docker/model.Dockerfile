@@ -14,12 +14,14 @@ RUN apt-get update && \
 
 # Install uv
 RUN pip install --no-cache-dir uv
+#RUN pip install --no-cache-dir "uv>=0.4.0"
 
 # Copy dependency files
 COPY pyproject.toml uv.lock ./
 
 # Install dependencies globally (NO .venv)
-RUN uv sync --frozen --no-install-project --system
+#RUN uv sync --frozen --no-install-project --system
+RUN uv pip install --system --no-cache -r pyproject.toml
 
 # =====================================
 # STAGE 2: RUNTIME

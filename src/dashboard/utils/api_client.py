@@ -1,5 +1,3 @@
-
-
 # =========================================
 # MODULE: api_client
 # PURPOSE: Unified inference client for
@@ -27,37 +25,24 @@ DEFAULT_TIMEOUT = 30  # seconds
 # =========================================
 # BUILD API URL (FASTAPI)
 # =========================================
-def build_api_url(path_key: str) -> str:
+def build_api_url() -> str:
     """
-    Build API URL from config.
-
-    Args:
-        path_key: "predict_path" or "compare_path"
-
-    Returns:
-        Full URL string
+    Build unified API URL (predict endpoint only)
     """
     cfg = load_main_config()
     api_cfg = get_api_config(cfg)
 
-    return api_cfg["base_url"] + api_cfg[path_key]
+    return api_cfg["base_url"] + api_cfg["predict_path"]
 
 
 # =========================================
 # CALL FASTAPI (LOCAL / DEV)
 # =========================================
-def call_rest_api(payload: dict, path_key: str) -> dict:
+def call_rest_api(payload: dict) -> dict:
     """
-    Call FastAPI endpoint.
-
-    Args:
-        payload: request payload
-        path_key: config key for endpoint path
-
-    Returns:
-        JSON response dict
+    Call FastAPI predict endpoint
     """
-    url = build_api_url(path_key)
+    url = build_api_url()
 
     headers = {
         "Content-Type": "application/json"
@@ -80,13 +65,7 @@ def call_rest_api(payload: dict, path_key: str) -> dict:
 # =========================================
 def call_sagemaker(payload: dict) -> dict:
     """
-    Call SageMaker endpoint using boto3.
-
-    Args:
-        payload: request payload
-
-    Returns:
-        JSON response dict (normalized)
+    Call SageMaker endpoint
     """
     import boto3
 
@@ -104,71 +83,52 @@ def call_sagemaker(payload: dict) -> dict:
         Body=json.dumps(payload)
     )
 
-    # SageMaker returns streaming body → decode
-    result = json.loads(response["Body"].read())
-
-    return result
+    return json.loads(response["Body"].read())
 
 
 # =========================================
-# MAIN ENTRY: UNIFIED CALL
+# MAIN ENTRY
 # =========================================
-def call_inference(payload: dict, mode: str = "predict") -> dict:
+def call_inference(payload: dict) -> dict:
     """
-    Unified inference call.
+    Unified inference call (single + multi model)
 
-    Automatically switches between:
-    - FastAPI (local)
-    - SageMaker (production)
-
-    Args:
-        payload: request payload
-        mode: "predict" or "compare"
+    Payload format:
+    {
+        "models": ["xgboost", "isolationforest"],
+        "data": [...]
+    }
 
     Returns:
-        dict:
-            {
-                "results": [...]
-            }
+    {
+        "results": {...},
+        "metadata": {...}
+    }
     """
     cfg = load_main_config()
     sm_cfg = get_sagemaker_config(cfg)
 
     try:
-        # =====================================
-        # SAGEMAKER PATH
-        # =====================================
-        if sm_cfg.get("enabled"):
 
+        # -------------------------------------
+        # SAGEMAKER
+        # -------------------------------------
+        if sm_cfg.get("enabled"):
             response = call_sagemaker(payload)
 
-        # =====================================
-        # FASTAPI PATH
-        # =====================================
+        # -------------------------------------
+        # FASTAPI
+        # -------------------------------------
         else:
+            response = call_rest_api(payload)
 
-            path_key = "predict_path" if mode == "predict" else "compare_path"
-            response = call_rest_api(payload, path_key)
+        # -------------------------------------
+        # VALIDATION
+        # -------------------------------------
+        if "results" not in response:
+            raise ValueError("Invalid response format: missing 'results'")
 
-        # =====================================
-        # NORMALIZE RESPONSE
-        # =====================================
-
-        # Case 1: single model (standard)
-        if "results" in response:
-            return response
-
-        # Case 2: compare API (multi-model)
-        if all(isinstance(v, list) for v in response.values()):
-            return response
-
-        # Case 3: raw list fallback
-        if isinstance(response, list):
-            return {"results": response}
-
-        # Otherwise invalid
-        raise ValueError(f"Invalid response format: {type(response)}")
-        
+        return response
 
     except Exception as e:
         raise RuntimeError(f"Inference call failed: {str(e)}")

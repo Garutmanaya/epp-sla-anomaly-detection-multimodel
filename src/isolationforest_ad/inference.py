@@ -16,7 +16,7 @@ from common.config_loader import (
 )
 from common.feature_engineering import prepare_features
 from isolationforest_ad.inference_engine import InferenceEngine
-
+from common.model_registry import get_model, is_model_loaded
 
 # =========================================
 # LOAD DATA
@@ -45,8 +45,15 @@ def run_inference(df):
     df = df.copy()
     df = prepare_features(df)
 
-    engine = InferenceEngine(version)
-
+    # ---------------------------------
+    # Use preloaded model if available
+    # ---------------------------------
+    if is_model_loaded("xgboost"):
+        engine = get_model("xgboost")
+    else:
+        # fallback (pipeline / CLI mode)
+        engine = InferenceEngine(version)
+    
     df = engine.predict(df)
     results = engine.detect(df)
 

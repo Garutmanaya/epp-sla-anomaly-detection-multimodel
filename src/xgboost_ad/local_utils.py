@@ -1,40 +1,26 @@
-# =========================================
-# MODULE: local_utils (XGBoost specific)
-# PURPOSE: Encapsulate model-specific paths
-# =========================================
+from common.model_utils import ModelUtils
 
-from pathlib import Path
-from common.config_loader import get_project_root
+MODEL_NAME = "xgboost"
 
-# -----------------------------------------
-# MODEL NAME (single source of truth)
-# -----------------------------------------
-MODEL_NAME = "xgboost".lower()
+utils = ModelUtils(MODEL_NAME)
 
 
-# =========================================
-# MODEL PATHS
-# =========================================
-def get_model_dir(version: str) -> Path:
-    """
-    models/v1/xgboost/
-    """
-    root = get_project_root()
-    return root / "models" / version / MODEL_NAME
+def get_model_file_path(version=None):
+    return utils.get_model_file_path(version)
 
 
-def get_model_path(version: str) -> Path:
-    """
-    models/v1/xgboost/model_bundle.pkl
-    """
-    return get_model_dir(version) / "model_bundle.pkl"
+def get_model_dir(version=None):
+    return utils.get_model_dir(version)
 
+
+def get_model_s3_key(version=None):
+    return utils.get_model_s3_key(version)
 
 # =========================================
-# S3 PATHS
+# BACKWARD COMPATIBILITY
 # =========================================
-def get_model_s3_key(version: str) -> str:
+def get_model_path(version=None):
     """
-    v1/xgboost/model_bundle.pkl
+    Backward compatible alias
     """
-    return f"{version}/{MODEL_NAME}/model_bundle.pkl"
+    return get_model_file_path(version)

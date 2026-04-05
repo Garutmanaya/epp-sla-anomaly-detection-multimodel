@@ -18,13 +18,6 @@ class InferenceEngine:
         self.version = version
 
         model_path = get_model_path(version)
-
-        if get_flag("download_from_s3"):
-            try:
-                download_file(get_model_s3_key(version), str(model_path))
-            except Exception as e:
-                print(f"S3 download failed: {e}")
-
         bundle = joblib.load(model_path)
 
         self.model = bundle["model"]

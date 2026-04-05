@@ -1,17 +1,26 @@
-# =========================================
-# MODULE: local_utils (Isolation Forest)
-# =========================================
-
-from pathlib import Path
-from common.config_loader import get_project_root
+from common.model_utils import ModelUtils
 
 MODEL_NAME = "isolationforest"
 
-def get_model_dir(version: str):
-    return get_project_root() / "models" / version / MODEL_NAME
+utils = ModelUtils(MODEL_NAME)
 
-def get_model_path(version: str):
-    return get_model_dir(version) / "model_bundle.pkl"
 
-def get_model_s3_key(version: str):
-    return f"{version}/{MODEL_NAME}/model_bundle.pkl"
+def get_model_file_path(version=None):
+    return utils.get_model_file_path(version)
+
+
+def get_model_dir(version=None):
+    return utils.get_model_dir(version)
+
+
+def get_model_s3_key(version=None):
+    return utils.get_model_s3_key(version)
+
+# =========================================
+# BACKWARD COMPATIBILITY
+# =========================================
+def get_model_path(version=None):
+    """
+    Backward compatible alias
+    """
+    return get_model_file_path(version)

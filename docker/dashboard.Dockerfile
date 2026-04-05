@@ -14,7 +14,8 @@ RUN pip install --no-cache-dir uv
 
 COPY pyproject.toml uv.lock ./
 
-RUN uv sync --frozen --no-install-project --system
+#RUN uv sync --frozen --no-install-project --system
+RUN uv pip install --system --no-cache -r pyproject.toml
 
 # =====================================
 # STAGE 2: RUNTIME
@@ -40,5 +41,5 @@ CMD ["streamlit", "run", "dashboard/app.py", "--server.port=8501", "--server.add
 
 #================================================================================
 #docker build -f docker/model.Dockerfile -t epp-sla-hourly-anomaly-model .
-#docker build -f docker/dashboard.Dockerfile -t epp-sla-hourly-anomaly-ui .
+#docker build -f docker/dashboard.Dockerfile -t epp-sla-hourly-anomaly-dashboard .
 #=====================================================================================

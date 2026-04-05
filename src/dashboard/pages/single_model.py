@@ -1,20 +1,12 @@
 # =========================================
-# SINGLE MODEL DASHBOARD (FINAL)
+# SINGLE MODEL DASHBOARD (UPDATED)
 # =========================================
 
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import requests
-import json
-from common.config_loader import load_main_config, get_api_config
+
 from dashboard.utils.api_client import call_inference
-
-cfg = load_main_config()
-api_cfg = get_api_config(cfg)
-
-
-API_URL = api_cfg["base_url"] + api_cfg["predict_path"]
 
 st.set_page_config(page_title="EPP SLA Hourly Anomaly Dashboard", layout="wide")
 
@@ -83,16 +75,20 @@ if df is not None:
     with st.spinner("Running inference..."):
 
         df_copy = df.copy()
-        df_copy["timestamp"] = df_copy["timestamp"].astype(str)
+
+        # Fix datetime serialization
+        for col in df_copy.select_dtypes(include=["datetime64[ns]"]).columns:
+            df_copy[col] = df_copy[col].astype(str)
 
         payload = {
-            "model": model,
+            "models": [model],   # ✅ unified format
             "data": df_copy.to_dict(orient="records")
         }
-        
-        response = call_inference(payload, mode="predict")
-        results = pd.DataFrame(response["results"])
-        
+
+        response = call_inference(payload)
+
+        results = pd.DataFrame(response["results"][model])
+        meta = response["metadata"][model]
 
     # =========================================
     # FILTERS
@@ -106,16 +102,16 @@ if df is not None:
     # =========================================
     # KPI CARDS
     # =========================================
-    total = len(results)
-    alerts = (results["Status"] != "Normal ✅").sum()
-    alert_rate = alerts / total if total else 0
-
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
 
     c1.metric("Model", model.upper())
-    c2.metric("Total Records", total)
+    c2.metric("Total", len(results))
+
+    alerts = (results["Status"] != "Normal ✅").sum()
     c3.metric("Alerts", alerts)
-    c4.metric("Alert Rate", f"{alert_rate*100:.2f}%")
+
+    c4.metric("Alert %", f"{alerts/len(results)*100:.2f}%")
+    c5.metric("Latency (ms)", meta["latency_ms"])
 
     st.markdown("---")
 
@@ -174,13 +170,7 @@ if df is not None:
         cmd_df = alerts_df["Command"].value_counts().reset_index()
         cmd_df.columns = ["Command", "Count"]
 
-        fig = px.bar(
-            cmd_df,
-            x="Command",
-            y="Count",
-            title="Alerts by Command"
-        )
-        
+        fig = px.bar(cmd_df, x="Command", y="Count")
         st.plotly_chart(fig, width="stretch")
 
     # =========================================

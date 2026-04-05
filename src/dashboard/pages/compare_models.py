@@ -4,17 +4,9 @@
 
 import streamlit as st
 import pandas as pd
-import requests
 import plotly.express as px
-import json
-from common.config_loader import load_main_config, get_api_config
+
 from dashboard.utils.api_client import call_inference
-
-cfg = load_main_config()
-api_cfg = get_api_config(cfg)
-
-
-API_URL = api_cfg["base_url"] + api_cfg["compare_path"]
 
 st.set_page_config(layout="wide")
 st.title("🧠 EPP SLA Hourly Advanced Model Comparison")
@@ -34,13 +26,14 @@ models = st.sidebar.multiselect(
 mode = st.sidebar.radio("Mode", ["Generate Data", "Upload CSV"])
 
 # =========================================
-# DATA INPUT
+# SESSION STATE
 # =========================================
-
-
 if "df" not in st.session_state:
     st.session_state.df = None
 
+# =========================================
+# DATA INPUT
+# =========================================
 if mode == "Generate Data":
 
     from xgboost_ad.validator import generate_test_data
@@ -54,8 +47,6 @@ if mode == "Generate Data":
             hours=hours,
             anomaly_prob=anomaly_prob
         )
-        st.subheader("📄 Input Data Preview")
-        st.dataframe(st.session_state.df.head(50), width="stretch")
 
 elif mode == "Upload CSV":
 
@@ -64,22 +55,26 @@ elif mode == "Upload CSV":
         df = pd.read_csv(file)
         df["timestamp"] = pd.to_datetime(df["timestamp"])
         st.session_state.df = df
-    
 
-# stop if no data
+# -----------------------------------------
+# Stop if no data
+# -----------------------------------------
 df = st.session_state.df
 
 if df is None:
     st.warning("Generate or upload data")
     st.stop()
 
+# Preview
+st.subheader("📄 Input Data Preview")
+st.dataframe(df.head(50), width="stretch")
 
 # =========================================
 # RUN ANALYSIS
 # =========================================
 if st.sidebar.button("Run Analysis"):
 
-    # ✅ Fix datetime serialization
+    # Fix datetime serialization
     df_copy = df.copy()
     for col in df_copy.select_dtypes(include=["datetime64[ns]"]).columns:
         df_copy[col] = df_copy[col].astype(str)
@@ -88,9 +83,16 @@ if st.sidebar.button("Run Analysis"):
         "models": models,
         "data": df_copy.to_dict(orient="records")
     }
-    response = call_inference(payload, mode="compare")
-    results = {m: pd.DataFrame(response[m]) for m in models}
 
+    # ✅ unified API call (no mode)
+    response = call_inference(payload)
+
+    results = {
+        m: pd.DataFrame(response["results"][m])
+        for m in models
+    }
+
+    metadata = response["metadata"]
 
     # =========================================
     # KPI CARDS
@@ -100,17 +102,28 @@ if st.sidebar.button("Run Analysis"):
     cols = st.columns(len(models))
 
     for i, m in enumerate(models):
+
         res = results[m]
+        meta = metadata[m]
+
         alerts = (res["Status"] != "Normal ✅").sum()
         total = len(res)
 
         cols[i].metric(
-            m,
+            m.upper(),
             f"{alerts}",
-            f"{round(alerts/total*100,2)}% alert rate"
+            f"{round(alerts/total*100,2)}% | {meta['latency_ms']} ms"
         )
 
     st.markdown("---")
+
+    # =========================================
+    # Model Metadata
+    # =========================================
+    st.subheader("⚙️ Model Metadata")
+
+    meta_df = pd.DataFrame(metadata).T
+    st.dataframe(meta_df, width="stretch")
 
     # =========================================
     # OVERLAP ANALYSIS
@@ -143,7 +156,7 @@ if st.sidebar.button("Run Analysis"):
             "Count": [both, only_1, only_2, none]
         })
 
-        fig = px.bar(overlap_df, x="Category", y="Count", title="Overlap Distribution")
+        fig = px.bar(overlap_df, x="Category", y="Count")
         st.plotly_chart(fig, width="stretch")
 
     st.markdown("---")
@@ -239,5 +252,5 @@ if st.sidebar.button("Run Analysis"):
     # =========================================
     with st.expander("📄 Raw Results"):
         for m in models:
-            st.subheader(m)
+            st.subheader(m.upper())
             st.dataframe(results[m].head(50), width="stretch")

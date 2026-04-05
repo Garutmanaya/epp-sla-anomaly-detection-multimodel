@@ -30,20 +30,34 @@ def input_fn(request_body, content_type):
 # -----------------------------
 # Predict
 # -----------------------------
+import time
+
 def predict_fn(input_data, model):
 
     model_name = input_data["model"]
     records = input_data["data"]
 
+    start = time.time()
+
     df = pd.DataFrame(records)
     df["timestamp"] = pd.to_datetime(df["timestamp"])
 
     runner = get_model_runner(model_name)
-
     results = runner(df)
 
-    return results
+    latency = round((time.time() - start) * 1000, 2)
 
+    return {
+        "results": {
+            model_name: results.to_dict(orient="records")
+        },
+        "metadata": {
+            model_name: {
+                "latency_ms": latency,
+                "records": len(results)
+            }
+        }
+    }
 
 # -----------------------------
 # Output formatter
