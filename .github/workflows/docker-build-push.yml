@@ -55,6 +55,7 @@ jobs:
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           REPO_NAME: ${{ env.NAMESPACE }}/${{ matrix.component }}
+          IMAGE_TAG: latest
         run: |
           docker build -t $ECR_REPOSITORY:${IMAGE_TAG} .
           echo "Building $REPO_NAME using docker/${{ matrix.component }}.Dockerfile"
@@ -67,3 +68,4 @@ jobs:
             -f docker/${{ matrix.component }}.Dockerfile .
           
           docker push $ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG
+          echo "image=$ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG" >> $GITHUB_OUTPUT
