@@ -31,6 +31,7 @@ def get_clients(region):
         "lambda": boto3.client("lambda", region_name=region),
         "apigw": boto3.client("apigateway", region_name=region),
         "sts": boto3.client("sts", region_name=region),
+        "iam": boto3.client("iam"),
     }
 
 
@@ -277,6 +278,92 @@ def cleanup(clients):
 
 
 # -----------------------------
+# IAM (NEW)
+# -----------------------------
+def create_role_if_not_exists(iam, role_name, assume_policy):
+    try:
+        role = iam.get_role(RoleName=role_name)
+        print(f"[SKIP] Role exists: {role_name}")
+        return role["Role"]["Arn"]
+    except ClientError:
+        print(f"[CREATE] Role: {role_name}")
+        role = iam.create_role(
+            RoleName=role_name,
+            AssumeRolePolicyDocument=json.dumps(assume_policy)
+        )
+        return role["Role"]["Arn"]
+
+
+def attach_policy(iam, role_name, policy_arn):
+    try:
+        iam.attach_role_policy(RoleName=role_name, PolicyArn=policy_arn)
+    except ClientError:
+        pass
+
+# -----------------------------
+# CREATE ROLES
+# -----------------------------
+def create_roles(iam):
+    print("\n[SETUP] Creating IAM Roles\n")
+
+    # -----------------------------
+    # SageMaker Role
+    # -----------------------------
+    sm_assume = {
+        "Version": "2012-10-17",
+        "Statement": [{
+            "Effect": "Allow",
+            "Principal": {"Service": "sagemaker.amazonaws.com"},
+            "Action": "sts:AssumeRole"
+        }]
+    }
+
+    sm_role_name = f"{PROJECT}-sagemaker-role"
+    sm_arn = create_role_if_not_exists(iam, sm_role_name, sm_assume)
+
+    attach_policy(iam, sm_role_name, "arn:aws:iam::aws:policy/AmazonSageMakerFullAccess")
+
+    # -----------------------------
+    # Lambda Role
+    # -----------------------------
+    lambda_assume = {
+        "Version": "2012-10-17",
+        "Statement": [{
+            "Effect": "Allow",
+            "Principal": {"Service": "lambda.amazonaws.com"},
+            "Action": "sts:AssumeRole"
+        }]
+    }
+
+    lambda_role_name = f"{PROJECT}-lambda-role"
+    lambda_arn = create_role_if_not_exists(iam, lambda_role_name, lambda_assume)
+
+    attach_policy(iam, lambda_role_name,
+                  "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole")
+
+    # Custom inline policy for SageMaker invoke
+    iam.put_role_policy(
+        RoleName=lambda_role_name,
+        PolicyName="invoke-sagemaker",
+        PolicyDocument=json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [{
+                "Effect": "Allow",
+                "Action": "sagemaker:InvokeEndpoint",
+                "Resource": "*"
+            }]
+        })
+    )
+
+    print("\n[OUTPUT]")
+    print(f"SAGEMAKER_ROLE_ARN={sm_arn}")
+    print(f"LAMBDA_ROLE_ARN={lambda_arn}")
+
+    print("\nExport these before deploy:")
+    print(f"export SAGEMAKER_ROLE_ARN={sm_arn}")
+    print(f"export LAMBDA_ROLE_ARN={lambda_arn}")
+
+# -----------------------------
 # CLI
 # -----------------------------
 def main():
@@ -290,6 +377,10 @@ def main():
     d.add_argument("--ecr-image", required=True)
     d.add_argument("--memory", type=int, default=2048)
     d.add_argument("--concurrency", type=int, default=10)
+
+    # CREATE ROLES (NEW)
+    r = sub.add_parser("create-roles")
+    r.add_argument("--region", default="us-east-1")
 
     # CLEANUP
     c = sub.add_parser("cleanup")
@@ -308,6 +399,11 @@ def main():
     clients = get_clients(args.region)
 
     if args.cmd == "deploy":
+        if not SAGEMAKER_ROLE or not LAMBDA_ROLE:
+            print("[ERROR] Missing IAM roles.")
+            print("Run: python cli.py create-roles")
+            print("Then export SAGEMAKER_ROLE_ARN and LAMBDA_ROLE_ARN")
+            sys.exit(1)
         ensure_model(clients["sm"], args.ecr_image)
         ensure_endpoint_config(clients["sm"], args.memory, args.concurrency)
         ensure_endpoint(clients["sm"])
@@ -319,6 +415,9 @@ def main():
 
     elif args.cmd == "status":
         show_status(clients, args.region)
+        
+    elif args.cmd == "create-roles":
+        create_roles(clients["iam"])
 
 
 if __name__ == "__main__":

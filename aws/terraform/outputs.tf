@@ -58,13 +58,3 @@ output "deployment_summary" {
     }
   }
 }
-
-output "deployment_summary_json" {
-  value = jsonencode({
-    project  = "epp-sla-anomaly-detection-multimodel"
-    endpoint = module.sagemaker.endpoint_name
-    api      = module.apigateway.api_url
-    region   = data.aws_region.current.id
-    account  = data.aws_caller_identity.current.account_id
-  })
-}
