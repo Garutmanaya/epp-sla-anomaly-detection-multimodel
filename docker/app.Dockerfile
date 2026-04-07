@@ -45,10 +45,16 @@ ENV PYTHONPATH=/app/src
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-EXPOSE 8000
+EXPOSE 8080
+
+COPY serve /usr/local/bin/serve
+RUN chmod +x /usr/local/bin/serve
+ENV PATH="/usr/local/bin:${PATH}"
+
+ENTRYPOINT ["serve"]
 
 # Start API
-CMD ["uvicorn", "api.app:app", "--host", "0.0.0.0", "--port", "8000"] 
+#CMD ["uvicorn", "api.app:app", "--host", "0.0.0.0", "--port", "8080"] 
 
 
 #================================================================================
