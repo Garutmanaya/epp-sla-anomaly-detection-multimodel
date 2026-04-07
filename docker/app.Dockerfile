@@ -47,7 +47,7 @@ ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8080
 
-COPY serve /usr/local/bin/serve
+COPY docker/serve /usr/local/bin/serve
 RUN chmod +x /usr/local/bin/serve
 ENV PATH="/usr/local/bin:${PATH}"
 
