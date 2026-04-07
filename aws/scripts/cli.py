@@ -1,13 +1,4 @@
 #!/usr/bin/env python3
-"""
-Idempotent CLI for:
-epp-sla-anomaly-detection-multimodel
-
-Features:
-- Safe re-run (no duplicate failures)
-- Skips existing resources
-- Minimal update logic
-"""
 
 import argparse
 import boto3
@@ -26,6 +17,10 @@ ENDPOINT_NAME = f"{PROJECT}-endpoint"
 LAMBDA_NAME = f"{PROJECT}-relay"
 API_NAME = f"{PROJECT}-api"
 
+# Optional: fallback roles from env
+SAGEMAKER_ROLE = os.getenv("SAGEMAKER_ROLE_ARN")
+LAMBDA_ROLE = os.getenv("LAMBDA_ROLE_ARN")
+
 
 # -----------------------------
 # AWS Clients
@@ -35,11 +30,12 @@ def get_clients(region):
         "sm": boto3.client("sagemaker", region_name=region),
         "lambda": boto3.client("lambda", region_name=region),
         "apigw": boto3.client("apigateway", region_name=region),
+        "sts": boto3.client("sts", region_name=region),
     }
 
 
 # -----------------------------
-# Utility: existence checks
+# Utility
 # -----------------------------
 def exists(fn, **kwargs):
     try:
@@ -50,9 +46,9 @@ def exists(fn, **kwargs):
 
 
 # -----------------------------
-# SageMaker Model
+# SageMaker
 # -----------------------------
-def ensure_model(sm, image, role):
+def ensure_model(sm, image):
     if exists(sm.describe_model, ModelName=MODEL_NAME):
         print("[SKIP] Model exists")
         return
@@ -60,14 +56,11 @@ def ensure_model(sm, image, role):
     print("[CREATE] Model")
     sm.create_model(
         ModelName=MODEL_NAME,
-        ExecutionRoleArn=role,
+        ExecutionRoleArn=SAGEMAKER_ROLE,
         PrimaryContainer={"Image": image}
     )
 
 
-# -----------------------------
-# Endpoint Config
-# -----------------------------
 def ensure_endpoint_config(sm, memory, concurrency):
     if exists(sm.describe_endpoint_config, EndpointConfigName=ENDPOINT_CONFIG):
         print("[SKIP] Endpoint config exists")
@@ -87,9 +80,6 @@ def ensure_endpoint_config(sm, memory, concurrency):
     )
 
 
-# -----------------------------
-# Endpoint
-# -----------------------------
 def ensure_endpoint(sm):
     if exists(sm.describe_endpoint, EndpointName=ENDPOINT_NAME):
         print("[SKIP] Endpoint exists")
@@ -117,7 +107,7 @@ def package_lambda():
         z.write("lambda_handler.py")
 
 
-def ensure_lambda(lambda_client, role):
+def ensure_lambda(lambda_client):
     if exists(lambda_client.get_function, FunctionName=LAMBDA_NAME):
         print("[SKIP] Lambda exists")
         return
@@ -129,7 +119,7 @@ def ensure_lambda(lambda_client, role):
         lambda_client.create_function(
             FunctionName=LAMBDA_NAME,
             Runtime="python3.11",
-            Role=role,
+            Role=LAMBDA_ROLE,
             Handler="lambda_handler.lambda_handler",
             Code={"ZipFile": f.read()},
             Timeout=30,
@@ -207,6 +197,55 @@ def ensure_api(apigw, lambda_client, region):
 
 
 # -----------------------------
+# STATUS (NEW)
+# -----------------------------
+def show_status(clients, region):
+    sm = clients["sm"]
+    lambda_client = clients["lambda"]
+    apigw = clients["apigw"]
+    sts = clients["sts"]
+
+    print("\n===== DEPLOYMENT STATUS =====\n")
+
+    # AWS identity
+    identity = sts.get_caller_identity()
+    print(f"AWS Account: {identity['Account']}")
+    print(f"Caller ARN : {identity['Arn']}")
+    print(f"Region     : {region}\n")
+
+    # SageMaker
+    try:
+        ep = sm.describe_endpoint(EndpointName=ENDPOINT_NAME)
+        print("SageMaker Endpoint:")
+        print(f"  Name   : {ep['EndpointName']}")
+        print(f"  Status : {ep['EndpointStatus']}\n")
+    except:
+        print("SageMaker Endpoint: NOT FOUND\n")
+
+    # Lambda
+    try:
+        fn = lambda_client.get_function(FunctionName=LAMBDA_NAME)
+        print("Lambda:")
+        print(f"  Name : {fn['Configuration']['FunctionName']}\n")
+    except:
+        print("Lambda: NOT FOUND\n")
+
+    # API Gateway
+    api = find_api(apigw)
+    if api:
+        url = f"https://{api['id']}.execute-api.{region}.amazonaws.com/prod/predict"
+        print("API Gateway:")
+        print(f"  URL : {url}\n")
+
+        print("Test Command:")
+        print(f"""curl -X POST {url} \\
+  -H "Content-Type: application/json" \\
+  -d '{{"model_name":"test","data":{{}}}}'\n""")
+    else:
+        print("API Gateway: NOT FOUND\n")
+
+
+# -----------------------------
 # Cleanup
 # -----------------------------
 def cleanup(clients):
@@ -245,16 +284,20 @@ def main():
 
     sub = parser.add_subparsers(dest="cmd")
 
+    # DEPLOY
     d = sub.add_parser("deploy")
     d.add_argument("--region", default="us-east-1")
     d.add_argument("--ecr-image", required=True)
-    d.add_argument("--sagemaker-role", required=True)
-    d.add_argument("--lambda-role", required=True)
     d.add_argument("--memory", type=int, default=2048)
     d.add_argument("--concurrency", type=int, default=10)
 
+    # CLEANUP
     c = sub.add_parser("cleanup")
     c.add_argument("--region", default="us-east-1")
+
+    # STATUS (NEW)
+    s = sub.add_parser("status")
+    s.add_argument("--region", default="us-east-1")
 
     args = parser.parse_args()
 
@@ -265,14 +308,17 @@ def main():
     clients = get_clients(args.region)
 
     if args.cmd == "deploy":
-        ensure_model(clients["sm"], args.ecr_image, args.sagemaker_role)
+        ensure_model(clients["sm"], args.ecr_image)
         ensure_endpoint_config(clients["sm"], args.memory, args.concurrency)
         ensure_endpoint(clients["sm"])
-        ensure_lambda(clients["lambda"], args.lambda_role)
+        ensure_lambda(clients["lambda"])
         ensure_api(clients["apigw"], clients["lambda"], args.region)
 
     elif args.cmd == "cleanup":
         cleanup(clients)
+
+    elif args.cmd == "status":
+        show_status(clients, args.region)
 
 
 if __name__ == "__main__":

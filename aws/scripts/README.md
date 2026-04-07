@@ -1,114 +1,213 @@
-# epp-sla-anomaly-detection-multimodel – Idempotent CLI Deployment
+# epp-sla-anomaly-detection-multimodel – CLI Deployment Tool
 
 ## Overview
 
-This CLI tool deploys a serverless ML inference pipeline on AWS in an **idempotent** manner (safe to re-run).
+This project includes an **idempotent CLI tool** to deploy, inspect, and clean up a serverless ML inference pipeline on AWS.
 
-It provisions:
+The CLI provisions:
 
-* Amazon SageMaker (serverless endpoint)
-* AWS Lambda (relay)
-* Amazon API Gateway (public API)
+* Amazon SageMaker – serverless inference endpoint
+* AWS Lambda – request relay layer
+* Amazon API Gateway – public API
 
----
-
-## Key Features
-
-* Idempotent (safe re-run)
-* No duplicate resource failures
-* Single command deploy + cleanup
-* Supports multi-model logic inside container
+The system is designed for **multi-model inference** using a single Docker container.
 
 ---
 
 ## Architecture
 
-Client → API Gateway → Lambda → SageMaker Serverless → Docker (FastAPI + Models)
+```text
+Client → API Gateway → Lambda → SageMaker Endpoint → FastAPI (Docker)
+```
+
+---
+
+## Key Features
+
+* Idempotent deployment (safe re-run)
+* Minimal input: only ECR image required
+* Automatic resource reuse (skip if exists)
+* Built-in deployment status inspection
+* CLI-based alternative to Terraform
 
 ---
 
 ## Prerequisites
 
 * Python 3.9+
-* AWS CLI configured
-* ECR image ready
-* IAM roles:
-
-  * SageMaker role (ECR access)
-  * Lambda role (`InvokeEndpoint`, logs)
-
----
-
-## Deploy
+* AWS CLI configured (`aws configure`)
+* Docker image pushed to ECR
+* IAM roles set via environment variables:
 
 ```bash
-python cli.py deploy \
-  --ecr-image <ECR_IMAGE_URI> \
-  --sagemaker-role <ROLE_ARN> \
-  --lambda-role <ROLE_ARN>
-```
-
-Optional:
-
-```bash
---memory 2048 --concurrency 10
+export SAGEMAKER_ROLE_ARN=arn:aws:iam::<account-id>:role/<role>
+export LAMBDA_ROLE_ARN=arn:aws:iam::<account-id>:role/<role>
 ```
 
 ---
 
-## Idempotency Behavior
+## CLI Commands
 
-* Existing resources are skipped
-* No failures on re-run
-* Safe for CI/CD pipelines
-
-Example:
+### 1. Deploy
 
 ```bash
-python cli.py deploy ...   # creates resources
-python cli.py deploy ...   # safely skips existing ones
+python cli.py deploy --ecr-image <ECR_IMAGE_URI>
+```
+
+Optional arguments:
+
+```bash
+--region        AWS region (default: us-east-1)
+--memory        SageMaker memory (default: 2048 MB)
+--concurrency   Max concurrency (default: 10)
+```
+
+### What happens during deploy
+
+1. Creates SageMaker model
+2. Creates endpoint configuration
+3. Deploys endpoint (longest step)
+4. Creates Lambda function
+5. Creates API Gateway
+
+All steps are **idempotent** (existing resources are skipped).
+
+---
+
+### 2. Status (NEW)
+
+```bash
+python cli.py status
+```
+
+Displays:
+
+* AWS account and caller identity
+* SageMaker endpoint status
+* Lambda function status
+* API Gateway URL
+* Ready-to-use curl test command
+
+---
+
+### Example Output
+
+```text
+===== DEPLOYMENT STATUS =====
+
+AWS Account: 123456789012
+Region     : us-east-1
+
+SageMaker Endpoint:
+  Name   : epp-sla-anomaly-detection-multimodel-endpoint
+  Status : InService
+
+Lambda:
+  Name : epp-sla-anomaly-detection-multimodel-relay
+
+API Gateway:
+  URL : https://abc.execute-api.us-east-1.amazonaws.com/prod/predict
 ```
 
 ---
 
-## Cleanup
+### 3. Test Inference
+
+```bash
+curl -X POST https://<api-id>.execute-api.<region>.amazonaws.com/prod/predict \
+  -H "Content-Type: application/json" \
+  -d '{"model_name":"test","data":{}}'
+```
+
+---
+
+### 4. Cleanup
 
 ```bash
 python cli.py cleanup
 ```
 
-Deletes all resources created by the CLI.
+Deletes:
+
+* SageMaker endpoint
+* Endpoint configuration
+* Model
+* Lambda function
+* API Gateway
 
 ---
 
-## API Usage
+## Important Notes
 
-POST /predict
+### SageMaker Container Requirements
 
-```json
-{
-  "model_name": "ADD-DOMAIN",
-  "data": {}
-}
+Your Docker image must:
+
+* Listen on port **8080**
+* Provide endpoints:
+
+  * `GET /ping`
+  * `POST /invocations`
+* Include a `serve` entrypoint
+
+---
+
+### Example `serve` script
+
+```bash
+#!/bin/bash
+exec uvicorn app:app --host 0.0.0.0 --port 8080
 ```
 
 ---
 
-## Notes
+### Common Issues
 
-* Model routing handled inside container
-* No `TargetModel` used
-* Serverless max memory: 6 GB
-* No GPU support
+| Issue                      | Cause                        | Fix                |
+| -------------------------- | ---------------------------- | ------------------ |
+| Endpoint stuck in Creating | Slow startup / model loading | Optimize container |
+| `serve not found`          | Missing entrypoint           | Add serve script   |
+| Port issues                | Using 8000                   | Switch to 8080     |
+| Module import error        | Wrong working dir            | Set `WORKDIR /app` |
+
+---
+
+## Best Practices
+
+* Keep Docker image size small (<1GB recommended)
+* Use lazy model loading for multi-model setup
+* Keep `/ping` endpoint lightweight
+* Use environment variables for IAM roles
+
+---
+
+## Relationship with Terraform
+
+This CLI mirrors the Terraform deployment:
+
+```text
+Model → EndpointConfig → Endpoint → Lambda → API Gateway
+```
+
+Use:
+
+* **Terraform** → production infrastructure
+* **CLI** → quick testing / iteration
 
 ---
 
 ## Future Improvements
 
-* Resource updates (not just skip)
-* Health/status command
-* Blue/green deployment
-* Observability (logs + tracing)
+* Health check validation after deploy
+* CloudWatch log links in status output
+* Multi-environment support (dev/stage/prod)
+* Blue/green endpoint deployments
+
+---
+
+## Summary
+
+This CLI provides a **simple, reproducible way** to deploy and inspect your ML inference pipeline with minimal input and full visibility.
 
 ---
 
