@@ -13,7 +13,7 @@ jobs:
     strategy:
       # This runs the steps below twice: once for 'app' and once for 'ui'
       matrix:
-        component: [app, ui]
+        component: [app]
 
     env:
       NAMESPACE: epp-sla-hourly-anomaly

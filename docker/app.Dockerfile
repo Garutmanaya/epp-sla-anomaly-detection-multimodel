@@ -45,13 +45,14 @@ ENV PYTHONPATH=/app/src
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-EXPOSE 8080
+EXPOSE 8000
 
 # Start API
-CMD ["uvicorn", "api.app:app", "--host", "0.0.0.0", "--port", "8080"] 
+CMD ["uvicorn", "api.app:app", "--host", "0.0.0.0", "--port", "8000"] 
 
 
 #================================================================================
-#docker build -f docker/model.Dockerfile -t epp-sla-hourly-anomaly-model .
-#docker build -f docker/dashboard.Dockerfile -t epp-sla-hourly-anomaly-ui .
+#docker build -f docker/app.Dockerfile -t epp-sla-anomaly-detection-multimodel .
+# run 
+#docker run -it  -p 8000:8000 epp-sla-anomaly-detection-multimodel:latest
 #=====================================================================================
