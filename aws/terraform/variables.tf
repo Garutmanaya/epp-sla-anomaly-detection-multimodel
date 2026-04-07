@@ -1,47 +1,26 @@
 ##############################################
-# Core AWS configuration
+# Input Variables
 ##############################################
 
+# AWS region where all resources will be deployed
 variable "region" {
-  description = "AWS region for all resources"
+  description = "AWS region"
   default     = "us-east-1"
 }
 
-variable "account_id" {
-  description = "AWS account ID (used for ECR image URI if needed)"
-}
-
-##############################################
-# ECR Image (your custom container)
-##############################################
-
+# ECR image that contains your FastAPI + models
 variable "ecr_image" {
-  description = "Full ECR image URI (must include tag)"
-  # Example:
-  # 123456789012.dkr.ecr.us-east-1.amazonaws.com/anomaly:latest
+  description = "Full ECR image URI"
 }
 
-##############################################
-# IAM Roles (must already exist)
-##############################################
-
-variable "sagemaker_role_arn" {
-  description = "IAM role ARN used by SageMaker to pull ECR + run container"
-}
-
-variable "lambda_role_arn" {
-  description = "IAM role ARN used by Lambda (must allow InvokeEndpoint + logs)"
-}
-
-##############################################
-# Serverless configuration
-##############################################
-
+# Serverless memory configuration for SageMaker
+# This directly impacts CPU allocation and cost
 variable "memory_size" {
-  description = "Memory size for serverless inference (MB)"
+  description = "Memory for SageMaker Serverless (MB)"
   default     = 2048
 }
 
+# Maximum concurrent requests SageMaker can handle
 variable "max_concurrency" {
   description = "Max concurrent invocations"
   default     = 10

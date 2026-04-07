@@ -1,185 +1,82 @@
 ##############################################
-# Provider
+# Root Module - Orchestrates all submodules
 ##############################################
 
-provider "aws" {
-  region = var.region
-}
-
-##############################################
-# Naming Convention (centralized)
-##############################################
-
+# Central naming convention to avoid duplication
 locals {
   project_name = "epp-sla-anomaly-detection-multimodel"
-
-  # SageMaker
-  model_name          = "${local.project_name}-model"
-  endpoint_config     = "${local.project_name}-config"
-  endpoint_name       = "${local.project_name}-endpoint"
-
-  # Lambda
-  lambda_name         = "${local.project_name}-relay"
-
-  # API Gateway
-  api_name            = "${local.project_name}-api"
 }
 
 ##############################################
-# 1. SageMaker Model
+# IAM Module
 ##############################################
-# This defines the container (ECR image)
-# No ModelDataUrl because model is inside container
+# Creates:
+# - SageMaker execution role
+# - Lambda execution role
 ##############################################
 
-resource "aws_sagemaker_model" "model" {
-  name               = local.model_name
-  execution_role_arn = var.sagemaker_role_arn
-
-  primary_container {
-    image = var.ecr_image
-  }
+module "iam" {
+  source       = "./modules/iam"
+  project_name = local.project_name
 }
 
 ##############################################
-# 2. Endpoint Configuration (SERVERLESS)
+# SageMaker Module
 ##############################################
-# Defines compute characteristics
+# Creates:
+# - Model (linked to ECR image)
+# - Serverless endpoint config
+# - Endpoint
 ##############################################
 
-resource "aws_sagemaker_endpoint_configuration" "config" {
-  name = local.endpoint_config
+module "sagemaker" {
+  source              = "./modules/sagemaker"
+  project_name        = local.project_name
+  ecr_image           = var.ecr_image
 
-  production_variants {
-    variant_name = "AllTraffic"
-    model_name   = aws_sagemaker_model.model.name
+  # Role created by IAM module
+  sagemaker_role_arn  = module.iam.sagemaker_role_arn
 
-    # SERVERLESS CONFIG (core requirement)
-    serverless_config {
-      memory_size_in_mb = var.memory_size
-      max_concurrency   = var.max_concurrency
-    }
-  }
+  memory_size         = var.memory_size
+  max_concurrency     = var.max_concurrency
 }
 
 ##############################################
-# 3. SageMaker Endpoint
+# Lambda Module
 ##############################################
-# Actual deployed HTTPS endpoint
+# Creates:
+# - Lambda relay function
+# - Packages Python code into ZIP
 ##############################################
 
-resource "aws_sagemaker_endpoint" "endpoint" {
-  name                 = local.endpoint_name
-  endpoint_config_name = aws_sagemaker_endpoint_configuration.config.name
+module "lambda" {
+  source          = "./modules/lambda"
+  project_name    = local.project_name
+
+  # IAM role from module
+  lambda_role_arn = module.iam.lambda_role_arn
+
+  # Pass SageMaker endpoint name to Lambda
+  endpoint_name   = module.sagemaker.endpoint_name
 }
 
 ##############################################
-# 4. Lambda Packaging
+# API Gateway Module
 ##############################################
-# Converts python file into deployable zip
-##############################################
-
-data "archive_file" "lambda_zip" {
-  type        = "zip"
-  source_file = "${path.module}/lambda/lambda_handler.py"
-  output_path = "${path.module}/lambda.zip"
-}
-
-##############################################
-# 5. Lambda Function (Relay)
-##############################################
-# This function:
-# - receives API Gateway request
-# - forwards to SageMaker endpoint
+# Creates:
+# - REST API
+# - /predict endpoint
+# - Integration with Lambda
 ##############################################
 
-resource "aws_lambda_function" "lambda" {
-  function_name = local.lambda_name
-  role          = var.lambda_role_arn
+module "apigateway" {
+  source = "./modules/apigateway"
 
-  handler = "lambda_handler.lambda_handler"
-  runtime = "python3.11"
+  project_name = local.project_name
 
-  filename         = data.archive_file.lambda_zip.output_path
-  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+  # Correct separation
+  lambda_arn      = module.lambda.lambda_invoke_arn
+  lambda_name     = module.lambda.lambda_function_name
 
-  timeout      = 30
-  memory_size  = 512
-
-  environment {
-    variables = {
-      ENDPOINT_NAME = local.endpoint_name
-    }
-  }
-}
-
-##############################################
-# 6. API Gateway (REST API)
-##############################################
-# Public entry point
-##############################################
-
-resource "aws_api_gateway_rest_api" "api" {
-  name = local.api_name
-}
-
-##############################################
-# Create /predict resource
-##############################################
-
-resource "aws_api_gateway_resource" "predict" {
-  rest_api_id = aws_api_gateway_rest_api.api.id
-  parent_id   = aws_api_gateway_rest_api.api.root_resource_id
-  path_part   = "predict"
-}
-
-##############################################
-# POST method (no auth for simplicity)
-##############################################
-
-resource "aws_api_gateway_method" "post" {
-  rest_api_id   = aws_api_gateway_rest_api.api.id
-  resource_id   = aws_api_gateway_resource.predict.id
-  http_method   = "POST"
-  authorization = "NONE"
-}
-
-##############################################
-# Lambda Integration (proxy mode)
-##############################################
-
-resource "aws_api_gateway_integration" "lambda" {
-  rest_api_id = aws_api_gateway_rest_api.api.id
-  resource_id = aws_api_gateway_resource.predict.id
-  http_method = aws_api_gateway_method.post.http_method
-
-  integration_http_method = "POST"
-  type                    = "AWS_PROXY"
-
-  # This connects API Gateway → Lambda
-  uri = aws_lambda_function.lambda.invoke_arn
-}
-
-##############################################
-# Permission: API Gateway → Lambda
-##############################################
-
-resource "aws_lambda_permission" "allow_apigw" {
-  statement_id  = "AllowAPIGatewayInvoke"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.lambda.function_name
-  principal     = "apigateway.amazonaws.com"
-}
-
-##############################################
-# Deployment (makes API callable)
-##############################################
-
-resource "aws_api_gateway_deployment" "deployment" {
-  depends_on = [
-    aws_api_gateway_integration.lambda
-  ]
-
-  rest_api_id = aws_api_gateway_rest_api.api.id
-  stage_name  = "prod"
+  region = var.region
 }

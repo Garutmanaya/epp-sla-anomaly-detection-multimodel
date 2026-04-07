@@ -1,12 +1,70 @@
 ##############################################
-# Final API endpoint
+# Structured Deployment Summary
 ##############################################
 
-output "api_url" {
-  description = "Invoke URL for inference"
-  value = "https://${aws_api_gateway_rest_api.api.id}.execute-api.${var.region}.amazonaws.com/prod/predict"
+output "deployment_summary" {
+  description = "Complete deployment metadata"
+
+  value = {
+    project = "epp-sla-anomaly-detection-multimodel"
+
+    ##########################################
+    # AWS Environment
+    ##########################################
+    aws = {
+      account_id   = data.aws_caller_identity.current.account_id
+      caller_arn   = data.aws_caller_identity.current.arn
+      principal    = element(split("/", data.aws_caller_identity.current.arn), 1)
+      region       = data.aws_region.current.id
+      partition    = data.aws_partition.current.partition
+    }
+
+    ##########################################
+    # SageMaker
+    ##########################################
+    sagemaker = {
+      endpoint_name = module.sagemaker.endpoint_name
+
+      console_url = "https://${data.aws_region.current.id}.console.aws.amazon.com/sagemaker/home?region=${data.aws_region.current.id}#/endpoints/${module.sagemaker.endpoint_name}"
+    }
+
+    ##########################################
+    # Lambda
+    ##########################################
+    lambda = {
+      function_name = module.lambda.lambda_function_name
+
+      console_url = "https://${data.aws_region.current.id}.console.aws.amazon.com/lambda/home?region=${data.aws_region.current.id}#/functions/${module.lambda.lambda_function_name}"
+    }
+
+    ##########################################
+    # API Gateway
+    ##########################################
+    api_gateway = {
+      api_id   = module.apigateway.api_id
+      api_url  = module.apigateway.api_url
+
+      console_url = "https://${data.aws_region.current.id}.console.aws.amazon.com/apigateway/home?region=${data.aws_region.current.id}#/apis/${module.apigateway.api_id}"
+    }
+
+    ##########################################
+    # Derived / Operational Info
+    ##########################################
+    operational = {
+      inference_endpoint = module.apigateway.api_url
+      health_check       = "${module.apigateway.api_url}"
+
+      curl_example = "curl -X POST ${module.apigateway.api_url} -H 'Content-Type: application/json' -d '{\"model_name\":\"test\",\"data\":{}}'"
+    }
+  }
 }
 
-output "sagemaker_endpoint_name" {
-  value = aws_sagemaker_endpoint.endpoint.name
+output "deployment_summary_json" {
+  value = jsonencode({
+    project  = "epp-sla-anomaly-detection-multimodel"
+    endpoint = module.sagemaker.endpoint_name
+    api      = module.apigateway.api_url
+    region   = data.aws_region.current.id
+    account  = data.aws_caller_identity.current.account_id
+  })
 }
