@@ -208,6 +208,10 @@ __marimo__/
 
 # ML Tracking
 mlruns/
+mlartifacts/
+mlflow.db
+mlflow.db-shm
+mlflow.db-wal
 # Python-generated files
 __pycache__/
 *.py[oc]
@@ -224,4 +228,4 @@ wheels/
 # Ignore all Comma Separated Values files
 *.csv
 # Ignore all Python Pickle files
-#*.pkl
+**/*.pkl

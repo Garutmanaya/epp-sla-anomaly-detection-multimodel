@@ -48,8 +48,8 @@ def run_inference(df):
     # ---------------------------------
     # Use preloaded model if available
     # ---------------------------------
-    if is_model_loaded("xgboost"):
-        engine = get_model("xgboost")
+    if is_model_loaded("isolationforest"):
+        engine = get_model("isolationforest")
     else:
         # fallback (pipeline / CLI mode)
         engine = InferenceEngine(version)

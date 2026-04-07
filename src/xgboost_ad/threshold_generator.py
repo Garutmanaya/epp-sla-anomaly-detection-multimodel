@@ -6,8 +6,6 @@
 # =========================================
 # IMPORTS
 # =========================================
-import os
-import joblib
 import pandas as pd
 import mlflow
 
@@ -15,14 +13,14 @@ from common.config import load_config
 from common.config_loader import (
     resolve_version_path,
     get_data_filename,
-    get_project_root,
     get_active_version,
 )
 from common.feature_engineering import (
     prepare_features,
     align_features
 )
-from xgboost_ad.local_utils import get_model_path
+from common.mlflow_utils import configure_mlflow
+from xgboost_ad.local_utils import load_model_bundle, save_model_bundle
 
 
 # =========================================
@@ -162,17 +160,14 @@ def apply_factor(thresholds, factor):
 # UPDATE MODEL BUNDLE
 # =========================================
 def update_model_bundle_with_thresholds(thresholds, cfg):
-
-    model_path = get_model_path(cfg.version)
-
-    bundle = joblib.load(model_path)
+    bundle = load_model_bundle(cfg.version)
 
     bundle["thresholds"] = {
         "default_baselines": thresholds,
         "hourly_overrides": {}
     }
-    
-    joblib.dump(bundle, model_path)
+
+    model_path = save_model_bundle(bundle, cfg.version)
 
     print(f"Thresholds added to model bundle: {model_path}")
 
@@ -187,20 +182,12 @@ def main():
     version = get_active_version()
     cfg = load_config(version)
 
-    root = get_project_root()
-    mlflow.set_tracking_uri(f"file:{os.path.join(root, 'mlruns')}")
-    mlflow.set_experiment("anomaly-detection")
+    configure_mlflow()
 
     with mlflow.start_run(run_name=f"thresholds_{cfg.version}"):
 
         # Load model bundle
-        model_path = resolve_version_path(
-            base_dir="models",
-            filename="model_bundle.pkl",
-            version=cfg.version
-        )
-
-        bundle = joblib.load(model_path)
+        bundle = load_model_bundle(cfg.version)
 
         models = bundle["models"]
         FEATURES = bundle["features"]

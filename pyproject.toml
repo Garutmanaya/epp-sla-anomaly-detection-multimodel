@@ -21,6 +21,7 @@ dependencies = [
     "streamlit>=1.56.0",
     "plotly>=6.6.0",
     "graphviz>=0.21",
+    "darts>=0.43.0",
 ]
 
 # -----------------------------

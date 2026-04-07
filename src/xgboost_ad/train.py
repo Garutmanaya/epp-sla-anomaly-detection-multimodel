@@ -6,9 +6,7 @@
 # =========================================
 # IMPORTS
 # =========================================
-import os
 import pandas as pd
-import joblib
 import mlflow
 import mlflow.xgboost
 
@@ -21,7 +19,6 @@ from common.config import load_config
 from common.config_loader import (
     resolve_version_path,
     get_data_filename,
-    get_project_root,
     get_active_version,
     get_flag,
 )
@@ -29,8 +26,9 @@ from common.feature_engineering import (
     prepare_features,
     get_feature_columns
 )
-from xgboost_ad.local_utils import get_model_path, get_model_s3_key
-from common.s3_utils import upload_file, build_s3_key
+from common.mlflow_utils import configure_mlflow
+from xgboost_ad.local_utils import get_model_s3_key, save_model_bundle
+from common.s3_utils import upload_file
 
 # =========================================
 # LOAD DATA
@@ -123,18 +121,13 @@ def save_model(models, FEATURES, cfg):
         "version": cfg.version
     }
 
-    model_path = get_model_path(cfg.version)
-    # create dir
-    model_path.parent.mkdir(parents=True, exist_ok=True)
-    joblib.dump(bundle, model_path)
-    
+    model_path = save_model_bundle(bundle, cfg.version)
 
     print(f"Model saved: {model_path}")
     mlflow.log_artifact(model_path)
 
     # ✅ Upload to S3
     if get_flag("upload_to_s3"):
-        model_path = get_model_path(cfg.version)
         s3_key = get_model_s3_key(cfg.version)
 
         upload_file(str(model_path), s3_key)
@@ -148,9 +141,7 @@ def main():
     cfg = load_config(version)
 
     # MLflow setup
-    root = get_project_root()
-    mlflow.set_tracking_uri(f"file:{os.path.join(root, 'mlruns')}")
-    mlflow.set_experiment("anomaly-detection")
+    configure_mlflow()
 
     with mlflow.start_run(run_name=f"train_{cfg.version}"):
 

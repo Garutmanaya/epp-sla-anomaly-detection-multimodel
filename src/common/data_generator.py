@@ -1,109 +1,23 @@
-# =========================================
-# MODULE: generate_data
-# PURPOSE: Generate synthetic EPP data using config-driven rules
-# =========================================
+from datetime import datetime
 
-# =========================================
-# IMPORTS
-# =========================================
-import pandas as pd
-import numpy as np
-import json
-from datetime import datetime, timedelta
 from common.s3_utils import build_s3_key, upload_file
 from common.config_loader import (
-    get_path,
     resolve_version_path,
-    load_main_config,
     get_flag,
     get_data_filename,
 )
+from shared.demo_data import (
+    generate_baseline_data,
+    load_generator_config as load_shared_generator_config,
+)
 
 
-# =========================================
-# CONFIG
-# =========================================
-np.random.seed(42)
-
-
-# =========================================
-# LOAD CONFIG
-# =========================================
 def load_generator_config():
-    main_config = load_main_config()
-    data_config_path = get_path("data_config", main_config)
-
-    with open(data_config_path, "r") as f:
-        config = json.load(f)
-
-    return config
+    return load_shared_generator_config()
 
 
-# =========================================
-# HELPERS
-# =========================================
-def add_noise(value, pct):
-    return value * (1 + np.random.uniform(-pct, pct))
-
-
-def random_in_range(low, high, pct):
-    base = np.random.uniform(low, high)
-    return add_noise(base, pct)
-
-
-def apply_hourly_rules(cmd, hour, values, hourly_rules):
-
-    hour_str = str(hour)
-
-    if hour_str in hourly_rules and cmd in hourly_rules[hour_str]:
-        rules = hourly_rules[hour_str][cmd]
-
-        for key, multiplier in rules.items():
-            field = key.replace("_multiplier", "")
-            if field in values:
-                values[field] *= multiplier
-
-    return values
-
-
-# =========================================
-# CORE LOGIC
-# =========================================
 def generate_data(start_date, hours, config):
-
-    RANDOMNESS = config["randomness"]
-    commands_config = config["commands"]
-    hourly_rules = config["hourly_rules"]
-
-    data = []
-    current = start_date
-
-    for _ in range(hours):
-        hour = current.hour
-
-        for cmd, cfg in commands_config.items():
-
-            values = {
-                "success_vol": add_noise(cfg["success_vol"], RANDOMNESS),
-                "fail_vol": add_noise(cfg["fail_vol"], RANDOMNESS),
-                "success_rt": random_in_range(*cfg["success_rt"], RANDOMNESS),
-                "fail_rt": random_in_range(*cfg["fail_rt"], RANDOMNESS)
-            }
-
-            values = apply_hourly_rules(cmd, hour, values, hourly_rules)
-
-            data.append({
-                "timestamp": current,
-                "command": cmd,
-                "success_vol": int(values["success_vol"]),
-                "success_rt_avg": round(values["success_rt"], 3),
-                "fail_vol": int(values["fail_vol"]),
-                "fail_rt_avg": round(values["fail_rt"], 3)
-            })
-
-        current += timedelta(hours=1)
-
-    return pd.DataFrame(data)
+    return generate_baseline_data(start_date=start_date, hours=hours, config=config)
 
 # =========================================
 # SAVE DATA to LOCAL DIRECTORY ( S3 )

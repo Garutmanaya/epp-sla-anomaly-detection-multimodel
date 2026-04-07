@@ -1,15 +1,19 @@
-# =========================================
-# MODULE: train (Isolation Forest)
-# =========================================
-
-import joblib
 import numpy as np
 import pandas as pd
+import mlflow
 from sklearn.ensemble import IsolationForest
 
-from common.config_loader import get_active_version, get_data_filename, resolve_version_path
+from common.config import load_config
+from common.config_loader import (
+    get_active_version,
+    get_data_filename,
+    get_flag,
+    resolve_version_path,
+)
 from common.feature_engineering import prepare_features, align_features
-from isolationforest_ad.local_utils import get_model_path
+from common.mlflow_utils import configure_mlflow
+from common.s3_utils import upload_file
+from isolationforest_ad.local_utils import get_model_s3_key, save_model_bundle
 
 
 TARGET_ALERT_RATE = 0.01   # 1%
@@ -18,66 +22,96 @@ TARGET_ALERT_RATE = 0.01   # 1%
 def main():
 
     version = get_active_version()
+    cfg = load_config(version)
 
-    # Load data
-    data_path = resolve_version_path(
-        base_dir="data",
-        filename=get_data_filename(),
-        version=version
-    )
+    configure_mlflow()
 
-    df = pd.read_csv(data_path)
-    df = prepare_features(df)
+    with mlflow.start_run(run_name=f"train_{version}_isolationforest"):
+        mlflow.log_param("version", version)
+        mlflow.log_params(
+            {
+                "model_type": "isolationforest",
+                "n_estimators": 100,
+                "contamination": TARGET_ALERT_RATE,
+                "random_state": 42,
+            }
+        )
 
-    FEATURES = [c for c in df.columns if c.startswith("hour_") or c.startswith("command_")]
+        # Load data
+        data_path = resolve_version_path(
+            base_dir="data",
+            filename=get_data_filename(),
+            version=version
+        )
 
-    X = align_features(df, FEATURES)
+        df = pd.read_csv(data_path)
+        df = prepare_features(df)
 
-    # Train model
-    model = IsolationForest(
-        n_estimators=100,
-        contamination=TARGET_ALERT_RATE,
-        random_state=42
-    )
+        FEATURES = [c for c in df.columns if c.startswith("hour_") or c.startswith("command_")]
+        X = align_features(df, FEATURES)
 
-    model.fit(X)
+        mlflow.log_metric("training_rows", len(df))
+        mlflow.log_metric("feature_count", len(FEATURES))
 
-    # ---------------------------------
-    # AUTO-TUNE THRESHOLD
-    # ---------------------------------
-    
-    scores = model.decision_function(X)
+        # Train model
+        model = IsolationForest(
+            n_estimators=100,
+            contamination=TARGET_ALERT_RATE,
+            random_state=42
+        )
 
-    raw_threshold = np.percentile(scores, TARGET_ALERT_RATE * 100)
+        model.fit(X)
 
-    # avoid edge-case collapse
-    threshold = raw_threshold + (scores.std() * 0.5)
+        # ---------------------------------
+        # AUTO-TUNE THRESHOLD
+        # ---------------------------------
+        scores = model.decision_function(X)
 
-    print(f"Raw threshold: {raw_threshold}")
-    print(f"Adjusted threshold: {threshold}")
+        raw_threshold = np.percentile(scores, TARGET_ALERT_RATE * 100)
 
-    # ---------------------------------
-    # SAVE BUNDLE
-    # ---------------------------------
-    bundle = {
-        "model": model,
-        "features": FEATURES,
-        "threshold": float(threshold),
-        "model_type": "isolationforest"
-    }
+        # avoid edge-case collapse
+        threshold = raw_threshold + (scores.std() * 0.5)
 
-    model_path = get_model_path(version)
-    model_path.parent.mkdir(parents=True, exist_ok=True)
+        print(f"Raw threshold: {raw_threshold}")
+        print(f"Adjusted threshold: {threshold}")
 
-    joblib.dump(bundle, model_path)
+        mlflow.log_metrics(
+            {
+                "score_min": float(scores.min()),
+                "score_max": float(scores.max()),
+                "score_mean": float(scores.mean()),
+                "score_std": float(scores.std()),
+                "raw_threshold": float(raw_threshold),
+                "adjusted_threshold": float(threshold),
+            }
+        )
 
-    print(f"Model saved: {model_path}")
-    print("Score stats:")
-    print(f"min: {scores.min()}")
-    print(f"max: {scores.max()}")
-    print(f"mean: {scores.mean()}")
-    print(f"threshold: {threshold}")
+        # ---------------------------------
+        # SAVE BUNDLE
+        # ---------------------------------
+        bundle = {
+            "model": model,
+            "features": FEATURES,
+            "threshold": float(threshold),
+            "model_type": "isolationforest",
+            "version": version,
+        }
 
+        model_path = save_model_bundle(bundle, version)
+
+        print(f"Model saved: {model_path}")
+        print("Score stats:")
+        print(f"min: {scores.min()}")
+        print(f"max: {scores.max()}")
+        print(f"mean: {scores.mean()}")
+        print(f"threshold: {threshold}")
+
+        mlflow.log_artifact(model_path)
+
+        if get_flag("upload_to_s3"):
+            upload_file(str(model_path), get_model_s3_key(version))
+
+    print("Training complete")
 
 if __name__ == "__main__":
     main()

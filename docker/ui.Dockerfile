@@ -15,7 +15,7 @@ RUN apt-get update && \
 RUN pip install --no-cache-dir uv
 
 # Copy dependency files
-COPY pyproject.toml uv.lock ./
+COPY epp-sla-anomaly-ui/pyproject.toml ./
 
 # Install dependencies globally (NO .venv)
 RUN uv pip install --system --no-cache -r pyproject.toml
@@ -25,17 +25,14 @@ RUN uv pip install --system --no-cache -r pyproject.toml
 # =====================================
 FROM python:3.12-slim
 
-WORKDIR /app
+WORKDIR /app/epp-sla-anomaly-ui
 
 COPY --from=builder /usr/local /usr/local
 
 # Copy app code
-COPY src ./src
-COPY configs ./configs
-# Need pyproject.toml to identify the root
-COPY pyproject.toml uv.lock ./
+COPY epp-sla-anomaly-ui ./
 
-ENV PYTHONPATH=/app/src
+ENV PYTHONPATH=/app/epp-sla-anomaly-ui/src
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 

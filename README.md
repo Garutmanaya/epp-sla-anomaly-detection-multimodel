@@ -217,7 +217,27 @@ POST /compare
 ### Run dashboard
 
 ```bash
-streamlit run dashboard/app.py
+cd epp-sla-anomaly-ui
+pip install -e .
+PYTHONPATH=src streamlit run src/dashboard/app.py
+```
+
+### MLflow UI
+
+```bash
+.venv/bin/mlflow ui \
+  --backend-store-uri sqlite:///$PWD/mlflow.db \
+  --registry-store-uri sqlite:///$PWD/mlflow.db \
+  --default-artifact-root file://$PWD/mlartifacts \
+  --port 5000
+```
+
+### Migrate Existing MLflow Runs
+
+```bash
+.venv/bin/mlflow experiments migrate-filestore \
+  --src-store-uri file://$PWD/mlruns \
+  --dest-store-uri sqlite:///$PWD/mlflow.db
 ```
 
 ---
@@ -266,5 +286,3 @@ This system provides a **flexible, extensible framework** for anomaly detection 
 * **Generality (Isolation Forest)**
 
 to deliver robust anomaly detection across diverse scenarios.
-
-
