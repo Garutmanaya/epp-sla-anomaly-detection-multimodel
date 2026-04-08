@@ -129,18 +129,18 @@ jobs:
       # -------------------------
       # 1️⃣2️⃣ Email Notification
       # -------------------------
-      - name: Send Email Notification
-        if: always()
-        run: |
-          STATUS="${{ job.status }}"
-          SUBJECT="Deployment Status: $STATUS"
-          BODY="Repo: ${{ github.repository }}\nTag: ${{ steps.vars.outputs.tag }}\nStatus: $STATUS"
-
-          echo -e "Subject:$SUBJECT\n\n$BODY" > mail.txt
-
-          curl --url "smtp://${{ secrets.SMTP_HOST }}:587" \
-            --ssl-reqd \
-            --mail-from "${{ secrets.EMAIL_FROM }}" \
-            --mail-rcpt "${{ secrets.EMAIL_TO }}" \
-            --upload-file mail.txt \
-            --user "${{ secrets.SMTP_USERNAME }}:${{ secrets.SMTP_PASSWORD }}"
+      #- name: Send Email Notification
+      #  if: always()
+      #  run: |
+      #    STATUS="${{ job.status }}"
+      #    SUBJECT="Deployment Status: $STATUS"
+      #    BODY="Repo: ${{ github.repository }}\nTag: ${{ steps.vars.outputs.tag }}\nStatus: $STATUS"
+      #
+      #    echo -e "Subject:$SUBJECT\n\n$BODY" > mail.txt
+      #
+      #    curl --url "smtp://${{ secrets.SMTP_HOST }}:587" \
+      #      --ssl-reqd \
+      #      --mail-from "${{ secrets.EMAIL_FROM }}" \
+      #      --mail-rcpt "${{ secrets.EMAIL_TO }}" \
+      #      --upload-file mail.txt \
+      #      --user "${{ secrets.SMTP_USERNAME }}:${{ secrets.SMTP_PASSWORD }}"
