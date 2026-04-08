@@ -29,6 +29,9 @@ resource "aws_api_gateway_method" "post" {
   resource_id   = aws_api_gateway_resource.predict.id
   http_method   = "POST"
   authorization = "NONE"
+
+  # ✅ Require API key
+  api_key_required = true
 }
 
 ##############################################
@@ -75,6 +78,7 @@ resource "aws_api_gateway_deployment" "deployment" {
     redeployment = sha1(jsonencode([
       aws_api_gateway_resource.predict.id,
       aws_api_gateway_method.post.id,
+      aws_api_gateway_method.post.api_key_required,   # ✅ API KEY REQUIRED
       aws_api_gateway_integration.lambda.id
     ]))
   }
@@ -84,10 +88,45 @@ resource "aws_api_gateway_deployment" "deployment" {
   }
 }
 
+##############################################
+# Stage
+##############################################
+
 resource "aws_api_gateway_stage" "stage" {
   stage_name    = "prod"
   rest_api_id   = aws_api_gateway_rest_api.api.id
   deployment_id = aws_api_gateway_deployment.deployment.id
+}
+
+##############################################
+# API KEY (NEW)
+##############################################
+
+resource "aws_api_gateway_api_key" "key" {
+  name = "${var.project_name}-api-key"
+}
+
+##############################################
+# Usage Plan (NEW)
+##############################################
+
+resource "aws_api_gateway_usage_plan" "plan" {
+  name = "${var.project_name}-usage-plan"
+
+  api_stages {
+    api_id = aws_api_gateway_rest_api.api.id
+    stage  = aws_api_gateway_stage.stage.stage_name
+  }
+}
+
+##############################################
+# Attach API Key to Usage Plan (NEW)
+##############################################
+
+resource "aws_api_gateway_usage_plan_key" "attach" {
+  key_id        = aws_api_gateway_api_key.key.id
+  key_type      = "API_KEY"
+  usage_plan_id = aws_api_gateway_usage_plan.plan.id
 }
 
 ##############################################
@@ -101,4 +140,14 @@ output "api_url" {
 output "api_id" {
   description = "API Gateway ID"
   value       = aws_api_gateway_rest_api.api.id
+}
+
+##############################################
+# API Key Output (NEW)
+##############################################
+
+output "api_key" {
+  description = "API Gateway API Key"
+  value       = aws_api_gateway_api_key.key.value
+  sensitive   = true
 }

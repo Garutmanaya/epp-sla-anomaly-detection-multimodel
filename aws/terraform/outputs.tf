@@ -2,6 +2,12 @@
 # Structured Deployment Summary
 ##############################################
 
+output "api_key" {
+  description = "API Gateway API Key"
+  value       = module.apigateway.api_key
+  sensitive   = true
+}
+
 output "deployment_summary" {
   description = "Complete deployment metadata"
 
