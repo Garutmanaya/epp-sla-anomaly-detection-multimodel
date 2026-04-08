@@ -229,3 +229,5 @@ wheels/
 *.csv
 # Ignore all Python Pickle files
 **/*.pkl
+# Ignore all tfstate files
+**/*.tfstate*

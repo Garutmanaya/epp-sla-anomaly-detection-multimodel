@@ -2,8 +2,8 @@ name: Build & Push Docker Image to ECR
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - "v*"   # triggers on version tags like v1.0.0
   workflow_dispatch:
 
 jobs:
@@ -49,8 +49,16 @@ jobs:
           mask-password: true
 
       # -------------------------
-      # 4️⃣ Build, Tag and Push Docker Image 
+      # 4️⃣ Extract Git Tag 
       # -------------------------
+      - name: Extract Git Tag
+        id: vars
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+      # --------------------------------------------
+      # 5️⃣ Build, Tag and Push Docker Image
+      # ---------------------------------------------
       - name: Build, Tag and Push Docker image 
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -64,8 +72,11 @@ jobs:
           # The "." at the end sets the root of the repo as the context 
           # so your Dockerfile can find your 2MB models and source code.
           docker build \
+            -t $ECR_REGISTRY/$REPO_NAME:${{ steps.vars.outputs.tag }} \
             -t $ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG \
             -f docker/${{ matrix.component }}.Dockerfile .
           
+          docker push $ECR_REGISTRY/$REPO_NAME:${{ steps.vars.outputs.tag }}
           docker push $ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG
-          echo "image=$ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG" >> $GITHUB_OUTPUT
+          echo "image=$ECR_REGISTRY/$REPO_NAME:$IMAGE_TAG" >> $GITHUB_OUTPUT 
+          echo "image=$ECR_REGISTRY/$REPO_NAME:${{ steps.vars.outputs.tag }}" >> $GITHUB_OUTPUT 
