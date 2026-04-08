@@ -107,7 +107,7 @@ resource "aws_api_gateway_api_key" "key" {
 }
 
 ##############################################
-# Usage Plan (NEW)
+# Usage Plan (UPDATED: add throttling + quota)
 ##############################################
 
 resource "aws_api_gateway_usage_plan" "plan" {
@@ -116,6 +116,18 @@ resource "aws_api_gateway_usage_plan" "plan" {
   api_stages {
     api_id = aws_api_gateway_rest_api.api.id
     stage  = aws_api_gateway_stage.stage.stage_name
+  }
+
+  # Throttle settings (per second)
+  throttle_settings {
+    rate_limit  = 5    # steady RPS allowed
+    burst_limit = 10   # short burst capacity
+  }
+
+  # Monthly quota (optional)
+  quota_settings {
+    limit  = 10000     # requests/month
+    period = "MONTH"
   }
 }
 
