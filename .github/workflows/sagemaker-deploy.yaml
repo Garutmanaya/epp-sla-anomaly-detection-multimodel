@@ -1,0 +1,146 @@
+name: Deploy to SageMaker (Terraform)
+
+on:
+  workflow_run:
+    workflows: ["Build & Push Docker Image to ECR"]
+    types:
+      - completed
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      NAMESPACE: epp-sla-hourly-anomaly
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      TF_DIR: aws/terraform
+      COMPONENT: app
+
+    steps:
+      # -------------------------
+      # 1️⃣ Checkout Code
+      # -------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # -------------------------
+      # 2️⃣ Configure AWS Credentials
+      # -------------------------
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # -------------------------
+      # 3️⃣ Extract Git Tag
+      # -------------------------
+      - name: Extract Git Tag
+        id: vars
+        run: |
+          TAG=${{ github.event.workflow_run.head_branch }}
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      # -------------------------
+      # 4️⃣ Build Image URI
+      # -------------------------
+      - name: Build Image URI
+        id: image
+        run: |
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+
+          IMAGE_URI=$ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.NAMESPACE }}/${{ env.COMPONENT }}:${{ steps.vars.outputs.tag }}
+
+          echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
+
+      # -------------------------
+      # 5️⃣ Terraform Init
+      # -------------------------
+      - name: Terraform Init
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform init
+
+      # -------------------------
+      # 6️⃣ Capture Previous Image
+      # -------------------------
+      - name: Capture Previous Image
+        id: prev
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          PREV=$(terraform output -raw current_image || echo "none")
+          echo "previous_image=$PREV" >> $GITHUB_OUTPUT
+
+      # -------------------------
+      # 7️⃣ Terraform Plan
+      # -------------------------
+      - name: Terraform Plan
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          terraform plan \
+            -out=tfplan \
+            -var="ecr_image=${{ steps.image.outputs.image_uri }}"
+
+      # -------------------------
+      # 8️⃣ Approval Gate
+      # -------------------------
+      - name: Await Approval
+        uses: trstringer/manual-approval@v1
+        with:
+          secret: ${{ github.token }}
+          approvers: ${{ github.actor }}
+          minimum-approvals: 1
+
+      # -------------------------
+      # 9️⃣ Terraform Apply
+      # -------------------------
+      - name: Terraform Apply
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform apply -auto-approve tfplan
+
+      # -------------------------
+      # 🔟 Health Check
+      # -------------------------
+      - name: Health Check
+        run: |
+          sleep 30
+          curl -f -X POST "${{ secrets.API_URL }}" \
+            -H "x-api-key: ${{ secrets.API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"model_name":"test","data":{}}'
+
+      # -------------------------
+      # 1️⃣1️⃣ Rollback (if failed)
+      # -------------------------
+      - name: Rollback
+        if: failure()
+        working-directory: ${{ env.TF_DIR }}
+        run: |
+          PREV="${{ steps.prev.outputs.previous_image }}"
+          if [ "$PREV" = "none" ]; then
+            echo "No previous image found"
+            exit 1
+          fi
+
+          terraform apply -auto-approve \
+            -var="ecr_image=$PREV"
+
+      # -------------------------
+      # 1️⃣2️⃣ Email Notification
+      # -------------------------
+      - name: Send Email Notification
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          SUBJECT="Deployment Status: $STATUS"
+          BODY="Repo: ${{ github.repository }}\nTag: ${{ steps.vars.outputs.tag }}\nStatus: $STATUS"
+
+          echo -e "Subject:$SUBJECT\n\n$BODY" > mail.txt
+
+          curl --url "smtp://${{ secrets.SMTP_HOST }}:587" \
+            --ssl-reqd \
+            --mail-from "${{ secrets.EMAIL_FROM }}" \
+            --mail-rcpt "${{ secrets.EMAIL_TO }}" \
+            --upload-file mail.txt \
+            --user "${{ secrets.SMTP_USERNAME }}:${{ secrets.SMTP_PASSWORD }}"
