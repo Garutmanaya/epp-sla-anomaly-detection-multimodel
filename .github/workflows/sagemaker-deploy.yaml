@@ -55,6 +55,15 @@ jobs:
 
           echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
 
+
+      # -------------------------
+      # Install Terraform
+      # -------------------------
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.14.8
+
       # -------------------------
       # 5️⃣ Terraform Init
       # -------------------------
