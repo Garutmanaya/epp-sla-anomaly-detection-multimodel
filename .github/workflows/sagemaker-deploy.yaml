@@ -11,6 +11,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
+    environment:
+      name: Production 
+
     env:
       NAMESPACE: epp-sla-hourly-anomaly
       AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -94,12 +97,12 @@ jobs:
       # -------------------------
       # 8️⃣ Approval Gate
       # -------------------------
-      - name: Await Approval
-        uses: trstringer/manual-approval@v1
-        with:
-          secret: ${{ github.token }}
-          approvers: ${{ github.actor }}
-          minimum-approvals: 1
+      #- name: Await Approval
+      #  uses: trstringer/manual-approval@v1
+      #  with:
+      #    secret: ${{ github.token }}
+      #    approvers: ${{ github.actor }}
+      #    minimum-approvals: 1
 
       # -------------------------
       # 9️⃣ Terraform Apply
