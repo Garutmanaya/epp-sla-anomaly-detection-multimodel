@@ -11,6 +11,16 @@ resource "aws_api_gateway_rest_api" "api" {
 }
 
 ##############################################
+# Create /ping resource
+##############################################
+
+resource "aws_api_gateway_resource" "ping" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  parent_id   = aws_api_gateway_rest_api.api.root_resource_id
+  path_part   = "ping"
+}
+
+##############################################
 # Create /predict resource
 ##############################################
 
@@ -21,7 +31,20 @@ resource "aws_api_gateway_resource" "predict" {
 }
 
 ##############################################
-# Define POST method
+# Define GET method for /ping
+##############################################
+
+resource "aws_api_gateway_method" "ping_get" {
+  rest_api_id   = aws_api_gateway_rest_api.api.id
+  resource_id   = aws_api_gateway_resource.ping.id
+  http_method   = "GET"
+
+  authorization = "NONE"
+  api_key_required = true   # keep same security model
+}
+
+##############################################
+# Define POST method /predict
 ##############################################
 
 resource "aws_api_gateway_method" "post" {
@@ -32,6 +55,21 @@ resource "aws_api_gateway_method" "post" {
 
   # ✅ Require API key
   api_key_required = true
+}
+
+##############################################
+# Integrate /ping with Lambda
+##############################################
+
+resource "aws_api_gateway_integration" "ping_lambda" {
+  rest_api_id = aws_api_gateway_rest_api.api.id
+  resource_id = aws_api_gateway_resource.ping.id
+  http_method = aws_api_gateway_method.ping_get.http_method
+
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+
+  uri = var.lambda_arn
 }
 
 ##############################################
@@ -79,7 +117,13 @@ resource "aws_api_gateway_deployment" "deployment" {
       aws_api_gateway_resource.predict.id,
       aws_api_gateway_method.post.id,
       aws_api_gateway_method.post.api_key_required,   # ✅ API KEY REQUIRED
-      aws_api_gateway_integration.lambda.id
+      aws_api_gateway_integration.lambda.id 
+
+      # Ping Triggers
+      aws_api_gateway_resource.ping.id,
+      aws_api_gateway_method.ping_get.id,
+      aws_api_gateway_method.ping_get.api_key_required, 
+      aws_api_gateway_integration.ping_lambda.id
     ]))
   }
 
@@ -147,6 +191,10 @@ resource "aws_api_gateway_usage_plan_key" "attach" {
 
 output "api_url" {
   value = "https://${aws_api_gateway_rest_api.api.id}.execute-api.${var.region}.amazonaws.com/prod/predict"
+}
+
+output "ping_url" {
+  value = "https://${aws_api_gateway_rest_api.api.id}.execute-api.${var.region}.amazonaws.com/prod/ping"
 }
 
 output "api_id" {

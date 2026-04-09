@@ -2,7 +2,8 @@
 
 import json
 import boto3
-import os
+
+import os 
 
 # Create SageMaker runtime client
 runtime = boto3.client("sagemaker-runtime")
@@ -16,16 +17,37 @@ def lambda_handler(event, context):
     Forwards payload to SageMaker endpoint
     Returns inference result
     """
+    path = event.get("path")
+    method = event.get("httpMethod")
 
-    body = json.loads(event.get("body", "{}"))
+    # ----------------------------------
+    # HEALTH CHECK
+    # ----------------------------------
+    if path == "/ping" and method == "GET":
+        return {
+            "statusCode": 200,
+            "body": json.dumps({"status": "ok"})
+        }
 
-    response = runtime.invoke_endpoint(
-        EndpointName=ENDPOINT_NAME,
-        ContentType="application/json",
-        Body=json.dumps(body)
-    )
+    # ----------------------------------
+    # INFERENCE (/predict)
+    # ----------------------------------
+    try:
+        body = json.loads(event.get("body", "{}"))
 
-    return {
-        "statusCode": 200,
-        "body": response["Body"].read().decode()
-    }
+        response = runtime.invoke_endpoint(
+            EndpointName=ENDPOINT_NAME,
+            ContentType="application/json",
+            Body=json.dumps(body)
+        )
+
+        return {
+            "statusCode": 200,
+            "body": response["Body"].read().decode()
+        }
+
+    except Exception as e:
+        return {
+            "statusCode": 500,
+            "body": json.dumps({"error": str(e)})
+        }
