@@ -7,29 +7,28 @@ on:
       - completed
   workflow_dispatch:
 
+env:
+  NAMESPACE: epp-sla-hourly-anomaly
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  TF_DIR: aws/terraform
+  COMPONENT: app
+
 jobs:
-  deploy:
+
+  ##############################################
+  # PLAN JOB (NO APPROVAL)
+  ##############################################
+  plan:
     runs-on: ubuntu-latest
 
-    environment:
-      name: Production 
-
-    env:
-      NAMESPACE: epp-sla-hourly-anomaly
-      AWS_REGION: ${{ secrets.AWS_REGION }}
-      TF_DIR: aws/terraform
-      COMPONENT: app
+    outputs:
+      image_uri: ${{ steps.image.outputs.image_uri }}
+      previous_image: ${{ steps.prev.outputs.previous_image }}
 
     steps:
-      # -------------------------
-      # 1️⃣ Checkout Code
-      # -------------------------
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # -------------------------
-      # 2️⃣ Configure AWS Credentials
-      # -------------------------
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
@@ -37,18 +36,12 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # -------------------------
-      # 3️⃣ Extract Git Tag
-      # -------------------------
       - name: Extract Git Tag
         id: vars
         run: |
           TAG=${{ github.event.workflow_run.head_branch }}
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
-      # -------------------------
-      # 4️⃣ Build Image URI
-      # -------------------------
       - name: Build Image URI
         id: image
         run: |
@@ -58,25 +51,15 @@ jobs:
 
           echo "image_uri=$IMAGE_URI" >> $GITHUB_OUTPUT
 
-
-      # -------------------------
-      # Install Terraform
-      # -------------------------
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.14.8
 
-      # -------------------------
-      # 5️⃣ Terraform Init
-      # -------------------------
       - name: Terraform Init
         working-directory: ${{ env.TF_DIR }}
         run: terraform init
 
-      # -------------------------
-      # 6️⃣ Capture Previous Image
-      # -------------------------
       - name: Capture Previous Image
         id: prev
         working-directory: ${{ env.TF_DIR }}
@@ -84,9 +67,6 @@ jobs:
           PREV=$(terraform output -raw current_image || echo "none")
           echo "previous_image=$PREV" >> $GITHUB_OUTPUT
 
-      # -------------------------
-      # 7️⃣ Terraform Plan
-      # -------------------------
       - name: Terraform Plan
         working-directory: ${{ env.TF_DIR }}
         run: |
@@ -94,42 +74,85 @@ jobs:
             -out=tfplan \
             -var="ecr_image=${{ steps.image.outputs.image_uri }}"
 
-      # -------------------------
-      # 8️⃣ Approval Gate
-      # -------------------------
-      #- name: Await Approval
-      #  uses: trstringer/manual-approval@v1
-      #  with:
-      #    secret: ${{ github.token }}
-      #    approvers: ${{ github.actor }}
-      #    minimum-approvals: 1
+      - name: Upload tfplan artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan
+          path: ${{ env.TF_DIR }}/tfplan
 
-      # -------------------------
-      # 9️⃣ Terraform Apply
-      # -------------------------
+
+  ##############################################
+  # APPLY JOB (WITH APPROVAL)
+  ##############################################
+  apply:
+    runs-on: ubuntu-latest
+    needs: plan
+
+    # ✅ Approval happens HERE
+    environment:
+      name: Production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Download tfplan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan
+          path: ${{ env.TF_DIR }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.14.8
+
+      - name: Terraform Init
+        working-directory: ${{ env.TF_DIR }}
+        run: terraform init
+
       - name: Terraform Apply
         working-directory: ${{ env.TF_DIR }}
         run: terraform apply -auto-approve tfplan
 
-      # -------------------------
-      # 🔟 Health Check
-      # -------------------------
       - name: Health Check
+        id: health
+        continue-on-error: true
         run: |
-          sleep 30
-          curl -f -X POST "${{ secrets.API_URL }}" \
-            -H "x-api-key: ${{ secrets.API_KEY }}" \
-            -H "Content-Type: application/json" \
-            -d '{"model_name":"test","data":{}}'
+          MAX_RETRIES=20
+          SLEEP_SECONDS=15
 
-      # -------------------------
-      # 1️⃣1️⃣ Rollback (if failed)
-      # -------------------------
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Health check attempt $i..."
+
+            if curl -f -X POST "${{ secrets.API_URL }}" \
+              -H "x-api-key: ${{ secrets.API_KEY }}" \
+              -H "Content-Type: application/json" \
+              -d '{"model_name":"test","data":{}}'; then
+
+              echo "✅ Endpoint is healthy"
+              exit 0
+            fi
+
+            echo "❌ Not ready yet, retrying in $SLEEP_SECONDS seconds..."
+            sleep $SLEEP_SECONDS
+          done
+
+          echo "🚨 Endpoint failed health check after retries"
+          exit 1
+      
       - name: Rollback
-        if: failure()
+        if: steps.health.outcome == 'failure'
         working-directory: ${{ env.TF_DIR }}
         run: |
-          PREV="${{ steps.prev.outputs.previous_image }}"
+          PREV="${{ needs.plan.outputs.previous_image }}"
           if [ "$PREV" = "none" ]; then
             echo "No previous image found"
             exit 1
@@ -137,22 +160,3 @@ jobs:
 
           terraform apply -auto-approve \
             -var="ecr_image=$PREV"
-
-      # -------------------------
-      # 1️⃣2️⃣ Email Notification
-      # -------------------------
-      #- name: Send Email Notification
-      #  if: always()
-      #  run: |
-      #    STATUS="${{ job.status }}"
-      #    SUBJECT="Deployment Status: $STATUS"
-      #    BODY="Repo: ${{ github.repository }}\nTag: ${{ steps.vars.outputs.tag }}\nStatus: $STATUS"
-      #
-      #    echo -e "Subject:$SUBJECT\n\n$BODY" > mail.txt
-      #
-      #    curl --url "smtp://${{ secrets.SMTP_HOST }}:587" \
-      #      --ssl-reqd \
-      #      --mail-from "${{ secrets.EMAIL_FROM }}" \
-      #      --mail-rcpt "${{ secrets.EMAIL_TO }}" \
-      #      --upload-file mail.txt \
-      #      --user "${{ secrets.SMTP_USERNAME }}:${{ secrets.SMTP_PASSWORD }}"
