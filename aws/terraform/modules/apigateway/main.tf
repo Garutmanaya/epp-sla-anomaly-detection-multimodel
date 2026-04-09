@@ -117,7 +117,7 @@ resource "aws_api_gateway_deployment" "deployment" {
       aws_api_gateway_resource.predict.id,
       aws_api_gateway_method.post.id,
       aws_api_gateway_method.post.api_key_required,   # ✅ API KEY REQUIRED
-      aws_api_gateway_integration.lambda.id 
+      aws_api_gateway_integration.lambda.id, 
 
       # Ping Triggers
       aws_api_gateway_resource.ping.id,
