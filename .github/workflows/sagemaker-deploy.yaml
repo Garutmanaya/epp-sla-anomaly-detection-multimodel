@@ -135,7 +135,7 @@ jobs:
             if curl -f -X POST "${{ secrets.API_URL }}" \
               -H "x-api-key: ${{ secrets.API_KEY }}" \
               -H "Content-Type: application/json" \
-              -d '{"model_name":"test","data":{}}'; then
+              -d '{"models":["xgboost"],"data":[{"timestamp":"2026-01-01T00:00:00","command":"CHECK-DOMAIN","success_vol":4000,"success_rt_avg":1.3,"fail_vol":1000,"fail_rt_avg":1.3 }] }' ; then
 
               echo "✅ Endpoint is healthy"
               exit 0
