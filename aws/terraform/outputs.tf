@@ -2,6 +2,11 @@
 # Structured Deployment Summary
 ##############################################
 
+output "current_image" {
+  description = "Currently deployed image"
+  value       = var.ecr_image
+}
+
 output "api_key" {
   description = "API Gateway API Key"
   value       = module.apigateway.api_key

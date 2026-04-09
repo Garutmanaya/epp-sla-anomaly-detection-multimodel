@@ -11,6 +11,7 @@ variable "region" {
 # ECR image that contains your FastAPI + models
 variable "ecr_image" {
   description = "Full ECR image URI"
+  type = string
 }
 
 # Serverless memory configuration for SageMaker
