@@ -24,5 +24,5 @@ variable "memory_size" {
 # Maximum concurrent requests SageMaker can handle
 variable "max_concurrency" {
   description = "Max concurrent invocations"
-  default     = 10
+  default     = 5
 }
